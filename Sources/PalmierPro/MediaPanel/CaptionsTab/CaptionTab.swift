@@ -82,7 +82,6 @@ struct CaptionTab: View {
     var body: some View {
         ZStack {
             VStack(spacing: AppTheme.Spacing.zero) {
-                previewToggleBar
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.zero) {
                         sourceSection
@@ -128,16 +127,28 @@ struct CaptionTab: View {
         }
     }
 
-    private var previewToggleBar: some View {
+    private var sourceSection: some View {
+        EditorPanelGroup(
+            L10n.string("Source"),
+            isExpanded: $sourceExpanded,
+            headerAccessory: { captionPreviewToggle }
+        ) {
+            InspectorRow(
+                label: L10n.string("Source"),
+                labelHelp: L10n.string("Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions."),
+                onReset: {
+                    selectedTrackId = nil
+                    selectedClipTargets = []
+                }
+            ) { sourceMenu }
+        }
+    }
+
+    private var captionPreviewToggle: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
-            Image(systemName: editor.captionPreviewEnabled ? "eye" : "eye.slash")
-                .font(.system(size: AppTheme.FontSize.xxs, weight: AppTheme.FontWeight.semibold))
-                .foregroundStyle(AppTheme.Text.tertiaryColor)
-                .frame(width: AppTheme.IconSize.xs, height: AppTheme.IconSize.xs)
             Text(L10n.string("Preview"))
-                .font(.system(size: AppTheme.FontSize.smMd, weight: AppTheme.FontWeight.medium))
-                .foregroundStyle(AppTheme.Text.primaryColor)
-            Spacer(minLength: AppTheme.Spacing.sm)
+                .font(.system(size: AppTheme.FontSize.xs, weight: AppTheme.FontWeight.medium))
+                .foregroundStyle(AppTheme.Text.secondaryColor)
             Toggle(
                 String(),
                 isOn: Binding(
@@ -148,30 +159,10 @@ struct CaptionTab: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.mini)
-            .accessibilityLabel(L10n.string("Preview"))
             .tint(AppTheme.Text.primaryColor.opacity(AppTheme.Opacity.strong))
+            .accessibilityLabel(L10n.string("Preview"))
         }
-        .padding(.horizontal, AppTheme.Spacing.smMd)
-        .frame(maxWidth: .infinity, minHeight: AppTheme.EditorPanel.groupHeaderHeight)
-        .background(AppTheme.Background.surfaceColor)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(AppTheme.Border.primaryColor)
-                .frame(height: AppTheme.BorderWidth.thin)
-        }
-    }
-
-    private var sourceSection: some View {
-        EditorPanelGroup(L10n.string("Source"), isExpanded: $sourceExpanded) {
-            InspectorRow(
-                label: L10n.string("Source"),
-                labelHelp: L10n.string("Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions."),
-                onReset: {
-                    selectedTrackId = nil
-                    selectedClipTargets = []
-                }
-            ) { sourceMenu }
-        }
+        .help(L10n.string("Preview"))
     }
 
     private var settingsSection: some View {
@@ -387,6 +378,14 @@ struct CaptionTab: View {
         }
     }
 
+    private var generateLabel: String {
+        L10n.string("Generate")
+    }
+
+    private var generateHelp: String {
+        String()
+    }
+
     private var agentMenu: some View {
         EditorAgentMenu(
             help: L10n.string("Let Agent create captions for you. Choose a predefined task, or ask Agent in the chat.")
@@ -424,14 +423,16 @@ struct CaptionTab: View {
     private var generateBar: some View {
         EditorActionFooter(message: note) {
             HStack(spacing: AppTheme.Spacing.sm) {
+                Spacer(minLength: AppTheme.Spacing.zero)
                 Button(action: generate) {
-                    Text(L10n.string("Generate Captions"))
+                    Text(generateLabel)
                         .lineLimit(1)
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.editorPrimary)
+                .buttonStyle(.capsule(.prominent))
+                .fixedSize()
                 .focusable(false)
                 .disabled(!canGenerateCaptions)
+                .help(generateHelp)
 
                 agentMenu
             }

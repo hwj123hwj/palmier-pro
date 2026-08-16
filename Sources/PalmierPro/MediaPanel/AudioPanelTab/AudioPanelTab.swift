@@ -1,9 +1,36 @@
 import SwiftUI
 
+enum AudioPanelSectionLayout {
+    static let contentInsets = EdgeInsets(
+        top: AppTheme.Spacing.smMd,
+        leading: AppTheme.Spacing.mdLg,
+        bottom: AppTheme.Spacing.smMd,
+        trailing: AppTheme.Spacing.mdLg
+    )
+}
+
 struct AudioPanelTab: View {
+    @Environment(EditorViewModel.self) private var editor
+    @State private var silenceExpanded = false
+    @State private var speakerExpanded = false
+
     var body: some View {
-        SpeechTab()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Background.surfaceColor)
+        ZStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.zero) {
+                    SpeechAnalysisSections(
+                        silenceExpanded: $silenceExpanded,
+                        speakerExpanded: $speakerExpanded
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            if let phase = editor.speakerIdentifyPhase {
+                AppTheme.Background.surfaceColor.opacity(AppTheme.Opacity.prominent)
+                GeneratingOverlay(label: phase, size: .preview)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.Background.surfaceColor)
     }
 }
