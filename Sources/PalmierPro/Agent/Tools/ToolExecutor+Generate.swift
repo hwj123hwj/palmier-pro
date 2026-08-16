@@ -13,6 +13,7 @@ extension ToolExecutor {
             models.append([
                 "id": model.id,
                 "type": model.type.rawValue,
+                "channel": model.channel.rawValue,
                 "displayName": model.displayName,
                 "aspectRatios": model.aspectRatios,
                 "durations": model.durations,

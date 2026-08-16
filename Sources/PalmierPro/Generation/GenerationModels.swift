@@ -6,11 +6,20 @@ enum GenerationModelType: String, Codable, Sendable {
     case image
 }
 
+/// How a model is reached: the fal.ai API with a stored key, or a browser
+/// session driven through the repo's ego-browser scripts (no key, subscription quota).
+enum GenerationChannel: String, Codable, Sendable {
+    case fal
+    case browserChatGPT
+    case browserGemini
+}
+
 struct GenerationModel: Identifiable, Sendable, Equatable {
     let id: String
     let type: GenerationModelType
     let displayName: String
-    /// fal.ai queue endpoint, e.g. "fal-ai/kling-video/v2.5-turbo/pro/text-to-video".
+    let channel: GenerationChannel
+    /// fal.ai queue endpoint; empty for browser channels.
     let endpoint: String
     let aspectRatios: [String]
     /// Video durations in seconds; empty for image models.
@@ -24,8 +33,25 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
 
     static let all: [GenerationModel] = [
         GenerationModel(
+            id: "browser-gemini-video", type: .video,
+            displayName: "Gemini Veo (Browser)",
+            channel: .browserGemini,
+            endpoint: "",
+            aspectRatios: [], durations: [], resolutions: [],
+            requiresSourceImage: false, maxReferenceImages: 0
+        ),
+        GenerationModel(
+            id: "browser-chatgpt-image", type: .image,
+            displayName: "GPT Image (Browser)",
+            channel: .browserChatGPT,
+            endpoint: "",
+            aspectRatios: [], durations: [], resolutions: [],
+            requiresSourceImage: false, maxReferenceImages: 0
+        ),
+        GenerationModel(
             id: "kling-v2.5-turbo-text-to-video", type: .video,
             displayName: "Kling 2.5 Turbo Pro",
+            channel: .fal,
             endpoint: "fal-ai/kling-video/v2.5-turbo/pro/text-to-video",
             aspectRatios: ["16:9", "9:16", "1:1"],
             durations: [5, 10], resolutions: [], requiresSourceImage: false, maxReferenceImages: 0
@@ -33,6 +59,7 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
         GenerationModel(
             id: "kling-v2.5-turbo-image-to-video", type: .video,
             displayName: "Kling 2.5 Turbo Pro (Image to Video)",
+            channel: .fal,
             endpoint: "fal-ai/kling-video/v2.5-turbo/pro/image-to-video",
             aspectRatios: ["16:9", "9:16", "1:1"],
             durations: [5, 10], resolutions: [], requiresSourceImage: true, maxReferenceImages: 0
@@ -40,6 +67,7 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
         GenerationModel(
             id: "nano-banana-pro", type: .image,
             displayName: "Nano Banana Pro",
+            channel: .fal,
             endpoint: "fal-ai/nano-banana-pro",
             aspectRatios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
             durations: [], resolutions: ["1K", "2K", "4K"], requiresSourceImage: false, maxReferenceImages: 14
@@ -54,7 +82,7 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
         all.first { $0.type == type } ?? all[0]
     }
 
-    var defaultAspectRatio: String { aspectRatios.contains("16:9") ? "16:9" : aspectRatios[0] }
+    var defaultAspectRatio: String { aspectRatios.contains("16:9") ? "16:9" : (aspectRatios.first ?? "") }
 }
 
 enum GenerationKeyStore {

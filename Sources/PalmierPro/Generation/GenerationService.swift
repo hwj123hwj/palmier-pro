@@ -86,6 +86,10 @@ final class GenerationService {
 
     private func validate(_ request: Request) throws {
         let model = request.model
+        guard model.channel != .fal || GenerationKeyStore.isConfigured else {
+            throw GenerationError.keyMissing
+        }
+        guard model.channel == .fal else { return }
         guard model.aspectRatios.contains(request.aspectRatio) else {
             throw GenerationError.invalidParameter("Aspect ratio \(request.aspectRatio) is not supported by \(model.displayName).")
         }
@@ -121,6 +125,22 @@ final class GenerationService {
                     : referenceURIs
             )
 
+            if request.model.channel != .fal {
+                asset.generationStatus = .generating
+                let staged = try await runBrowserScript(request: request, prompt: asset.generationInput?.prompt ?? "")
+                asset.generationStatus = .downloading
+                try editor.projectPackageCoordinator.beginMutation()
+                defer { editor.projectPackageCoordinator.endMutation() }
+                let committedURL = try await editor.commitStagedProjectMedia(
+                    staged,
+                    filename: asset.url.lastPathComponent,
+                    maxBytes: maxDownloadBytes,
+                    workAlreadyAdmitted: true
+                )
+                await finalize(asset: asset, committedURL: committedURL, editor: editor)
+                return
+            }
+
             asset.generationStatus = .generating
             let submit = try await provider.submit(endpoint: request.model.endpoint, input: input)
             while true {
@@ -146,25 +166,74 @@ final class GenerationService {
                 workAlreadyAdmitted: true
             )
 
-            asset.url = committedURL
-            asset.generationStatus = .none
-            _ = await asset.loadMetadata()
-            editor.updateManifestMetadata(for: [asset])
-            editor.prepareMediaVisuals(for: asset)
-            editor.searchIndex.schedule(asset)
-            editor.onProjectCheckpointRequired?()
-            AppNotifications.generationComplete(
-                assetId: asset.id,
-                projectURL: editor.projectURL,
-                assetName: asset.name,
-                assetType: asset.type,
-                count: 1
-            )
+            await finalize(asset: asset, committedURL: committedURL, editor: editor)
         } catch is CancellationError {
             fail(asset, editor: editor, message: "Cancelled")
         } catch {
             fail(asset, editor: editor, message: error.localizedDescription)
         }
+    }
+
+    private func finalize(asset: MediaAsset, committedURL: URL, editor: EditorViewModel) async {
+        asset.url = committedURL
+        asset.generationStatus = .none
+        _ = await asset.loadMetadata()
+        editor.updateManifestMetadata(for: [asset])
+        editor.prepareMediaVisuals(for: asset)
+        editor.searchIndex.schedule(asset)
+        editor.onProjectCheckpointRequired?()
+        AppNotifications.generationComplete(
+            assetId: asset.id,
+            projectURL: editor.projectURL,
+            assetName: asset.name,
+            assetType: asset.type,
+            count: 1
+        )
+    }
+
+    /// Drives the repo's ego-browser scripts and returns the produced file.
+    private func runBrowserScript(request: Request, prompt: String) async throws -> URL {
+        let (script, timeout): (String, Duration)
+        switch request.model.channel {
+        case .browserChatGPT:
+            (script, timeout) = ("generate-image-browser.sh", .seconds(240))
+        case .browserGemini:
+            (script, timeout) = ("generate-video-browser.sh", .seconds(480))
+        case .fal:
+            throw GenerationError.invalidParameter("unsupported channel")
+        }
+        let scriptsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("palmier-pro/scripts")
+        let scriptURL = scriptsDir.appendingPathComponent(script)
+        guard FileManager.default.isExecutableFile(atPath: scriptURL.path) else {
+            throw GenerationError.invalidParameter("Missing script ~/palmier-pro/scripts/\(script).")
+        }
+
+        let stagedURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palmier-browser-gen-\(UUID().uuidString.prefix(8))")
+        let process = Process()
+        process.executableURL = scriptURL
+        process.arguments = [prompt, stagedURL.path]
+        let errPipe = Pipe()
+        process.standardError = errPipe
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+
+        let started = ContinuousClock.now
+        while process.isRunning {
+            try Task.checkCancellation()
+            if started.duration(to: .now) > timeout {
+                process.terminate()
+                throw GenerationError.invalidParameter("\(request.model.displayName) timed out.")
+            }
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: stagedURL.path) else {
+            let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            try? FileManager.default.removeItem(at: stagedURL)
+            throw GenerationError.invalidParameter("Browser generation failed: \(err.suffix(300))")
+        }
+        return stagedURL
     }
 
     private func fail(_ asset: MediaAsset, editor: EditorViewModel, message: String) {

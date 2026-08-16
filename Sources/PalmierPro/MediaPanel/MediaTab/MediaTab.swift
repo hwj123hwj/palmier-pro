@@ -304,9 +304,7 @@ struct MediaTab: View {
             } else {
                 toolbarButton(title: L10n.string("Import"), action: importMedia)
                     .tourAnchor(.importButton)
-                if GenerationKeyStore.isConfigured {
-                    toolbarButton(title: L10n.string("Generate"), action: { showGenerateSheet = true })
-                }
+                toolbarButton(title: L10n.string("Generate"), action: { showGenerateSheet = true })
                 overflowMenu
                 Spacer(minLength: AppTheme.Spacing.zero)
             }

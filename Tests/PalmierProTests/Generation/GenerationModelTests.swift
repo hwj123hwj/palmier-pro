@@ -4,14 +4,23 @@ import Testing
 @Suite("Generation catalog and provider mapping")
 struct GenerationModelTests {
     @Test func catalogEndpointsAreUniqueAndCovered() {
-        #expect(Set(GenerationModel.all.map(\.endpoint)).count == GenerationModel.all.count)
+        #expect(Set(GenerationModel.all.map(\.id)).count == GenerationModel.all.count)
+        #expect(Set(GenerationModel.all.filter { $0.channel == .fal }.map(\.endpoint)).count
+            == GenerationModel.all.filter { $0.channel == .fal }.count)
         #expect(GenerationModel.all.contains { $0.type == .video && !$0.requiresSourceImage })
         #expect(GenerationModel.all.contains { $0.type == .image })
         for model in GenerationModel.all {
-            #expect(!model.aspectRatios.isEmpty)
-            if model.type == .video { #expect(!model.durations.isEmpty) }
-            if model.type == .image { #expect(!model.resolutions.isEmpty) }
+            if model.channel == .fal {
+                #expect(!model.aspectRatios.isEmpty)
+                if model.type == .video { #expect(!model.durations.isEmpty) }
+                if model.type == .image { #expect(!model.resolutions.isEmpty) }
+                #expect(!model.endpoint.isEmpty)
+            } else {
+                #expect(model.endpoint.isEmpty)
+            }
         }
+        #expect(GenerationModel.all.contains { $0.channel == .browserChatGPT && $0.type == .image })
+        #expect(GenerationModel.all.contains { $0.channel == .browserGemini && $0.type == .video })
     }
 
     @Test func videoInputCarriesSchemaFields() throws {

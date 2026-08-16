@@ -43,19 +43,26 @@ struct GenerateSheet: View {
                 }
             }
 
-            Picker(L10n.string("Aspect Ratio"), selection: aspectBinding) {
-                ForEach(model.aspectRatios, id: \.self) { ratio in
-                    Text(verbatim: ratio).tag(ratio)
+            if model.channel == .fal {
+                Picker(L10n.string("Aspect Ratio"), selection: aspectBinding) {
+                    ForEach(model.aspectRatios, id: \.self) { ratio in
+                        Text(verbatim: ratio).tag(ratio)
+                    }
                 }
+            } else {
+                Text(L10n.string("Runs in your browser session and bills your web subscription. Prompt style and aspect follow the site."))
+                    .font(.system(size: AppTheme.FontSize.sm))
+                    .foregroundStyle(AppTheme.Text.tertiaryColor)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if isVideo {
+            if isVideo && model.channel == .fal {
                 Picker(L10n.string("Duration"), selection: durationBinding) {
                     ForEach(model.durations, id: \.self) { seconds in
                         Text(L10n.string("\(seconds)s")).tag(seconds)
                     }
                 }
-            } else {
+            } else if model.channel == .fal {
                 Picker(L10n.string("Resolution"), selection: resolutionBinding) {
                     ForEach(model.resolutions, id: \.self) { value in
                         Text(verbatim: value).tag(value)
