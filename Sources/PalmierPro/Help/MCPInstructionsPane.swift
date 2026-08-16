@@ -315,8 +315,3 @@ private struct CopyButton: View {
     }
 }
 
-#Preview {
-    MCPInstructionsPane()
-        .frame(width: AppTheme.Settings.contentMaxWidth, height: AppTheme.Settings.skillDetailMinHeight)
-        .background(AppTheme.Background.surfaceColor)
-}

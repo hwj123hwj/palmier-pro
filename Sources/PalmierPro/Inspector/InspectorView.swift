@@ -46,7 +46,6 @@ struct InspectorView: View {
         case effects
         case audio
         case multicam
-        case ai
 
         var titleKey: String {
             switch self {
@@ -56,7 +55,6 @@ struct InspectorView: View {
             case .effects: L10n.key("Adjust")
             case .audio: L10n.key("Audio")
             case .multicam: L10n.key("Multicam")
-            case .ai: L10n.key("AI Edit")
             }
         }
 
@@ -68,7 +66,6 @@ struct InspectorView: View {
             case .effects: "slider.horizontal.3"
             case .audio: "waveform"
             case .multicam: "square.grid.2x2"
-            case .ai: "wand.and.stars"
             }
         }
     }
@@ -314,7 +311,6 @@ struct InspectorView: View {
 
     private func availableTabs(
         for selection: InspectorClipSelection,
-        resolvedClipAsset: MediaAsset?,
         selectedMulticamGroupId: String?
     ) -> [ClipTab] {
         let audios = selection.audioClips
@@ -330,10 +326,6 @@ struct InspectorView: View {
         }
         if !audios.isEmpty { tabs.append(.audio) }
         if selectedMulticamGroupId != nil { tabs.append(.multicam) }
-        if aiEditEligible(selection: selection, resolvedClipAsset: resolvedClipAsset)
-            && !AccountService.shared.isMisconfigured {
-            tabs.append(.ai)
-        }
         return tabs
     }
 
@@ -348,36 +340,15 @@ struct InspectorView: View {
         return nil
     }
 
-    private func aiEditEligible(
-        selection: InspectorClipSelection,
-        resolvedClipAsset: MediaAsset?
-    ) -> Bool {
-        let visualCount = selection.textClips.count + selection.nonTextVisualClips.count
-        let audios = selection.audioClips
-        guard resolvedClipAsset != nil else { return false }
-        if visualCount == 0 { return audios.count == 1 }
-        guard visualCount == 1, let visual = selection.firstVisualClip else { return false }
-        if audios.isEmpty { return true }
-        let partners = Set(editor.linkedPartnerIds(of: visual.id))
-        return audios.allSatisfy { partners.contains($0.id) }
-    }
-
     private func activeTab(in tabs: [ClipTab]) -> ClipTab? {
         return tabs.contains(preferredTab) ? preferredTab : tabs.first
     }
 
-    private func resolvedClipAsset(for selection: InspectorClipSelection) -> MediaAsset? {
-        guard let clip = selection.firstVisualClip ?? selection.firstAudioClip else { return nil }
-        return editor.mediaAssets.first { $0.id == clip.mediaRef }
-    }
-
     @ViewBuilder
     private func clipInspectorContent(selection: InspectorClipSelection) -> some View {
-        let clipAsset = resolvedClipAsset(for: selection)
         let multicamGroupId = selectedMulticamGroupId(for: selection)
         let tabs = availableTabs(
             for: selection,
-            resolvedClipAsset: clipAsset,
             selectedMulticamGroupId: multicamGroupId
         )
         let selectedTab = activeTab(in: tabs)
@@ -386,10 +357,7 @@ struct InspectorView: View {
                 tabBar(tabs, selectedTab: selectedTab)
             }
             Group {
-                if selectedTab == .ai, let asset = clipAsset {
-                    AIEditTab(asset: asset, clipId: selection.firstVisualClip?.id ?? selection.firstAudioClip?.id)
-                        .tourAnchor(.aiEditPanel)
-                } else if selectedTab == .effects {
+                if selectedTab == .effects {
                     ScrollView { effectsTabContent(clips: selection.nonTextVisualClips) }
                 } else {
                     ScrollView {
@@ -413,7 +381,7 @@ struct InspectorView: View {
                                 if let groupId = multicamGroupId {
                                     MulticamTab(groupId: groupId)
                                 }
-                            case .effects, .ai, .none:
+                            case .effects, .none:
                                 EmptyView()
                             }
                         }
@@ -428,8 +396,7 @@ struct InspectorView: View {
             items: tabs.map {
                 TitleTabBar.Item(titleKey: $0.titleKey, systemImage: $0.systemImage)
             },
-            selected: selectedTab?.titleKey,
-            tourAnchors: tabs.contains(.ai) ? [ClipTab.ai.titleKey: .aiEditTab] : [:]
+            selected: selectedTab?.titleKey
         ) { title in
             if let tab = tabs.first(where: { $0.titleKey == title }) { preferredTab = tab }
         }
@@ -901,7 +868,6 @@ struct InspectorView: View {
                     if let gen = asset.generationInput {
                         inputSection(gen)
                     }
-                    AIEditTab(asset: asset, usesOwnScrollView: false)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -985,7 +951,6 @@ struct InspectorView: View {
     }
 
     private func inputSection(_ gen: GenerationInput) -> some View {
-        let hasReferences = GenerationReferencesStrip.hasResolvableReferences(gen, in: editor.mediaAssets)
         let metadata = inputMetadataSummary(gen)
         return EditorPanelGroup(
             L10n.string("Generation Input"),
@@ -997,9 +962,6 @@ struct InspectorView: View {
                 trailing: AppTheme.Spacing.smMd
             )
         ) {
-            if hasReferences {
-                GenerationReferencesStrip(generationInput: gen)
-            }
             if !gen.prompt.isEmpty || !metadata.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                     if !gen.prompt.isEmpty {
@@ -1028,7 +990,6 @@ struct InspectorView: View {
                     cornerRadius: AppTheme.Radius.sm,
                     borderWidth: AppTheme.BorderWidth.hairline
                 )
-                .padding(.top, hasReferences ? AppTheme.Spacing.md : AppTheme.Spacing.zero)
             }
         }
         .padding(.top, AppTheme.Spacing.xxs)
@@ -1053,10 +1014,10 @@ struct InspectorView: View {
     }
 
     private func inputMetadataSummary(_ gen: GenerationInput) -> String {
-        var values = [ModelRegistry.displayName(for: gen.model)]
+        var values = [gen.model]
         if gen.draft == true { values.append(L10n.string("Draft")) }
         if !gen.aspectRatio.isEmpty {
-            values.append(ImageModelConfig.aspectRatioDisplayLabel(gen.aspectRatio))
+            values.append(gen.aspectRatio)
         }
         if let resolution = gen.resolution, !resolution.isEmpty {
             values.append(resolution)

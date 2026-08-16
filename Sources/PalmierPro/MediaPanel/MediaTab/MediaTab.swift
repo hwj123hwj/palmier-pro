@@ -32,7 +32,6 @@ struct MediaTab: View {
     @State var assetFrames: [String: CGRect] = [:]
     @State var marqueeSelection = MarqueeSelection()
 
-    @State private var mediaPanelHeight: CGFloat = 600
     @State private var showMatteSheet = false
 
     enum ViewMode: String, CaseIterable {
@@ -129,18 +128,6 @@ struct MediaTab: View {
             }
             .layoutPriority(1)
             .onChange(of: searchQuery) { _, _ in scheduleMomentSearch() }
-
-            if editor.showGenerationPanel && !mediaAreaCollapsed {
-                GenerationView(maxPanelHeight: generationPanelMaxHeight)
-                    .frame(maxHeight: CGFloat(generationPanelMaxHeight), alignment: .bottom)
-                    .tourAnchor(.generation)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.height
-        } action: { newValue in
-            mediaPanelHeight = newValue
         }
         .onExitCommand { if editor.pendingSwapClipId != nil { editor.cancelMediaSwap() } }
         .onChange(of: editor.folders.map(\.id)) { _, _ in pruneStaleFolderState() }
@@ -293,14 +280,9 @@ struct MediaTab: View {
     }
 
     private var actionsRow: some View {
-        let showGenerate = !AccountService.shared.isMisconfigured
-        return HStack(spacing: AppTheme.Spacing.xs) {
+        HStack(spacing: AppTheme.Spacing.xs) {
             toolbarButton(title: L10n.string("Import"), systemImage: "plus", action: importMedia)
                 .tourAnchor(.importButton)
-            if showGenerate {
-                toolbarButton(title: L10n.string("Generate"), systemImage: "sparkles", filled: true, accentStyle: AnyShapeStyle(AppTheme.aiGradient), action: toggleGenerationPanel)
-                    .tourAnchor(.generateButton)
-            }
 
             overflowMenu
 
@@ -460,7 +442,7 @@ struct MediaTab: View {
     }
 
     private var showsEmptyState: Bool {
-        editor.mediaAssets.isEmpty && editor.folders.isEmpty && !editor.showGenerationPanel
+        editor.mediaAssets.isEmpty && editor.folders.isEmpty
     }
 
     // MARK: - Sort & Filter
@@ -611,23 +593,8 @@ struct MediaTab: View {
         .help(title)
     }
 
-    private var mediaAreaCollapsed: Bool {
-        !editor.mediaPanelVisible
-            || (editor.maximizedPanel != nil && editor.maximizedPanel != .media)
-    }
-
-    private var generationPanelMaxHeight: Double {
-        Double(max(0, mediaPanelHeight - AppTheme.GenerationPanel.mediaAreaMinHeight))
-    }
-
-    private func toggleGenerationPanel() {
-        withAnimation(.easeInOut(duration: AppTheme.Anim.transition)) {
-            editor.showGenerationPanel.toggle()
-        }
-    }
-
     private var overflowMenu: some View {
-        let canOrganize = !AccountService.shared.isMisconfigured && !editor.mediaAssets.isEmpty
+        let canOrganize = !editor.mediaAssets.isEmpty
         return toolbarMenuIcon(systemName: "ellipsis") {
             Button(action: createNewFolderInCurrent) {
                 Label(L10n.string("New Folder"), systemImage: "folder.badge.plus")

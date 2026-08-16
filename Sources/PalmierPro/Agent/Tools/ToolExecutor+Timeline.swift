@@ -28,7 +28,6 @@ extension ToolExecutor {
             dict["window"] = [window.lowerBound, min(window.upperBound, editor.timeline.totalFrames)]
         }
         dict["currentFrame"] = editor.currentFrame
-        dict["canGenerate"] = Self.canGenerate
         let liveGroupIds = editor.referencedMulticamGroupIds()
         let liveGroups = editor.multicamGroups.filter { liveGroupIds.contains($0.id) }
         if !liveGroups.isEmpty {
@@ -46,7 +45,6 @@ extension ToolExecutor {
         return .ok(json)
     }
 
-    static var canGenerate: Bool { AccountService.shared.isSignedIn && AccountService.shared.hasCredits }
 
     static func rawTimelineDict(_ timeline: Timeline) -> [String: Any]? {
         try? JSONSerialization.jsonObject(with: JSONEncoder().encode(timeline)) as? [String: Any]

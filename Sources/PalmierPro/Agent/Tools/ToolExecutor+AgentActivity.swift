@@ -15,7 +15,6 @@ extension ToolName {
         .removeWords, .removeSilence,
         .addTexts, .updateText, .addCaptions,
         .applyColor, .applyEffect, .denoiseAudio,
-        .generateAudio,
     ]
 
     var publishesTimelineChanges: Bool {

@@ -27,7 +27,7 @@ import Testing
         await editor.pendingManifestMetadataFlushTask?.value
         #expect(editor.mediaManifest.entries.map(\.name) == ["Latest"])
     }
-    @Test func draftGenerationSurvivesManifestRoundTrip() throws {
+    @Test func generationInputSurvivesManifestRoundTrip() throws {
         var input = GenerationInput(
             prompt: "Draft", model: "flux-3", duration: 8,
             aspectRatio: "16:9", resolution: "720p", draft: true
@@ -43,20 +43,18 @@ import Testing
         let data = try JSONEncoder().encode(generated.toManifestEntry(projectURL: nil))
         let restored = try JSONDecoder().decode(MediaManifestEntry.self, from: data)
         #expect(restored.generationInput?.draft == true)
-        #expect(MediaAsset(entry: restored, resolvedURL: generated.url).canEnhanceDraft)
+        #expect(restored.generationInput?.backendJobId == "draft-job")
+        #expect(restored.generationInput?.resultURLs == ["video", "cache"])
     }
 
-    @Test func refundedCreditsSurviveManifestRoundTrip() throws {
-        var input = GenerationInput(
-            prompt: "Fail", model: "flux-3", duration: 5,
-            aspectRatio: "16:9", resolution: "720p"
-        )
-        input.refundedCredits = 12
+    @Test func failedGenerationStatusSurvivesManifestRoundTrip() throws {
         let generated = MediaAsset(
             url: URL(fileURLWithPath: "/tmp/failed.mp4"),
             type: .video,
             name: "Failed",
-            generationInput: input
+            generationInput: GenerationInput(
+                prompt: "Fail", model: "flux-3", duration: 5,
+                aspectRatio: "16:9", resolution: "720p")
         )
         generated.generationStatus = .failed("Provider error")
         let data = try JSONEncoder().encode(generated.toManifestEntry(projectURL: nil))
@@ -64,9 +62,6 @@ import Testing
             entry: try JSONDecoder().decode(MediaManifestEntry.self, from: data),
             resolvedURL: generated.url
         )
-        #expect(asset.generationInput?.refundedCredits == 12)
-        #expect(asset.wasGenerationRefunded)
-        asset.generationInput?.refundedCredits = 0
-        #expect(!asset.wasGenerationRefunded)
+        #expect(asset.generationStatus == .failed("Provider error"))
     }
 }

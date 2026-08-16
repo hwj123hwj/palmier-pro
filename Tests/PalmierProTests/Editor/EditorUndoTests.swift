@@ -82,25 +82,19 @@ struct EditorUndoTests {
         #expect(manager.undoActionName == "Outer")
     }
 
-    @Test func reportsOnlyCommittedOutermostActionsWithOrigin() {
+    @Test func reportsOnlyCommittedOutermostActions() {
         let (undo, manager, counter) = harness()
         var committedActionCount = 0
-        var origin: Analytics.Origin?
         undo.onActionCommitted = {
             committedActionCount += 1
-            origin = Analytics.origin
         }
 
         undo.perform("No-op") {}
-        Analytics.$origin.withValue(Analytics.Origin(source: "agent", sessionID: "session-1")) {
-            undo.perform("Outer") {
-                setCounter(1, actionName: "Inner", counter: counter, undo: undo)
-            }
+        undo.perform("Outer") {
+            setCounter(1, actionName: "Inner", counter: counter, undo: undo)
         }
 
         #expect(committedActionCount == 1)
-        #expect(origin?.source == "agent")
-        #expect(origin?.sessionID == "session-1")
         withExtendedLifetime(manager) {}
     }
 

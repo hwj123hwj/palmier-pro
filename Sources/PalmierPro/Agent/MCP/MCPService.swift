@@ -40,15 +40,11 @@ final class MCPService {
                 version: "1.0.0",
                 instructions: AgentInstructions.serverInstructions + AgentInstructions.projectNavigation,
                 capabilities: .init(
-                    resources: .init(subscribe: false, listChanged: false),
                     tools: .init(listChanged: true)
                 )
             )
             await Self.registerTools(on: server, executor: toolExecutor)
-            await Self.registerResources(on: server)
-            return MCPServerInstance(server: server) { clientInfo in
-                await toolExecutor.setMCPClientInfo(MCPClientInfo(clientInfo))
-            }
+            return MCPServerInstance(server: server)
         }
         self.httpServer = httpServer
         Task { @MainActor [weak self] in
@@ -95,45 +91,6 @@ final class MCPService {
         let args = ToolArgsBridge.argsFromMCP(params.arguments ?? [:])
         let result = await executor.execute(name: params.name, args: args, source: "mcp")
         return result.toMCPResult()
-    }
-
-    private nonisolated static func registerResources(on server: Server) async {
-        let resources = [
-            Resource(
-                name: "Video Models",
-                uri: "palmier://models/video",
-                description: "Available AI video generation models and their capabilities",
-                mimeType: "application/json"
-            ),
-            Resource(
-                name: "Image Models",
-                uri: "palmier://models/image",
-                description: "Available AI image generation models and their capabilities",
-                mimeType: "application/json"
-            ),
-        ]
-
-        await server.withMethodHandler(ListResources.self) { _ in
-            .init(resources: resources)
-        }
-
-        await server.withMethodHandler(ReadResource.self) { params in
-            await Self.readResource(uri: params.uri)
-        }
-    }
-
-    @MainActor
-    private static func readResource(uri: String) -> ReadResource.Result {
-        switch uri {
-        case "palmier://models/video":
-            let json = ToolExecutor.jsonString(VideoModelConfig.allModels.map { ToolExecutor.videoModelInfo($0) }) ?? "[]"
-            return .init(contents: [.text(json, uri: uri, mimeType: "application/json")])
-        case "palmier://models/image":
-            let json = ToolExecutor.jsonString(ImageModelConfig.allModels.map { ToolExecutor.imageModelInfo($0) }) ?? "[]"
-            return .init(contents: [.text(json, uri: uri, mimeType: "application/json")])
-        default:
-            return .init(contents: [.text("Unknown resource: \(uri)", uri: uri)])
-        }
     }
 
 }

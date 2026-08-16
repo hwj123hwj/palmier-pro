@@ -180,7 +180,6 @@ extension ToolExecutor {
             "fps": editor.timeline.fps,
             "resolution": "\(editor.timeline.width)x\(editor.timeline.height)",
             "mediaCount": editor.mediaAssets.count,
-            "canGenerate": Self.canGenerate,
             "timelines": timelineEntries(editor),
             "openCount": AppState.shared.openProjects.count,
         ]

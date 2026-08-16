@@ -247,7 +247,7 @@ enum CaptionSpecBuilder {
         resized.durationFrames = durationFrames
         guard let originalWords = resized.words else { return resized }
 
-        var words = originalWords.compactMap { word -> WordTiming? in
+        let words = originalWords.compactMap { word -> WordTiming? in
             let shiftedStart = word.startFrame.subtractingReportingOverflow(wordOffsetFrames)
             let shiftedEnd = word.endFrame.subtractingReportingOverflow(wordOffsetFrames)
             let start = min(max(0, shiftedStart.overflow ? 0 : shiftedStart.partialValue), durationFrames)

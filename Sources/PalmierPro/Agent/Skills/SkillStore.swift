@@ -493,7 +493,7 @@ final class SkillStore {
 
     @discardableResult
     func createSkill(raw: String, preferredID: String? = nil) async -> String? {
-        guard let parsed = SkillFrontmatter.requiredFields(raw) else { return nil }
+        guard SkillFrontmatter.requiredFields(raw) != nil else { return nil }
         guard let id = await serializeMutation("create skill", { [self] in
             let directory = storageDirectory
             let id = try await Self.performFileOperation {
@@ -504,7 +504,6 @@ final class SkillStore {
         }) else {
             return nil
         }
-        Analytics.captureSkillCreated(skillName: parsed.name)
         return id
     }
 

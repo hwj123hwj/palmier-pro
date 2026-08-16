@@ -54,8 +54,6 @@ struct TitleBarTrailingView: View {
         HStack(spacing: AppTheme.Spacing.sm) {
             Spacer(minLength: AppTheme.Spacing.zero)
 
-            UpdateProjectBadge()
-
             Button(action: { editor.showExportDialog = true }) {
                 HStack(spacing: AppTheme.Spacing.xs) {
                     Group {
@@ -82,8 +80,6 @@ struct TitleBarTrailingView: View {
                     ? L10n.string("Export")
                     : L10n.string("Export, \(activeCount) active, \(waitingCount) waiting")
             )
-
-            UserAvatarButton()
         }
     }
 

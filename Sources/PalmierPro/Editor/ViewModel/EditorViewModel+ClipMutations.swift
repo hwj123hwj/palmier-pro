@@ -640,21 +640,6 @@ extension EditorViewModel {
         }
     }
 
-    /// Flag the selected clip (and any linked clips sharing its `mediaRef`)
-    /// as awaiting an AI-generated replacement.
-    func markPendingReplacement(clipId: String) {
-        let ids = linkedClipIdsSharingMedia(anchor: clipId)
-        pendingReplacements.formUnion(ids)
-    }
-
-    /// Clear the pending-replacement flag on the selected clip and any linked
-    /// clips that were marked together.
-    func clearPendingReplacement(clipId: String) {
-        let ids = linkedClipIdsSharingMedia(anchor: clipId)
-        pendingReplacements.subtract(ids)
-        pendingReplacements.remove(clipId)
-    }
-
     func linkedClipIdsSharingMedia(anchor: String) -> Set<String> {
         guard let loc = findClip(id: anchor) else { return [anchor] }
         let clip = timeline.tracks[loc.trackIndex].clips[loc.clipIndex]

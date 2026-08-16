@@ -73,7 +73,7 @@ struct AgentActivityHighlightTests {
     @Test func onlyMutationToolsPublishTimelineChanges() {
         let excluded: [ToolName] = [.inspectTimeline, .getTranscript, .organizeMedia]
         let included: [ToolName] = [
-            .manageTracks, .setClipProperties, .copyClipSettings, .denoiseAudio, .generateAudio,
+            .manageTracks, .setClipProperties, .copyClipSettings, .denoiseAudio,
         ]
         #expect(excluded.allSatisfy { !$0.publishesTimelineChanges })
         #expect(included.allSatisfy { $0.publishesTimelineChanges })
@@ -207,7 +207,7 @@ struct AgentActivityHighlightTests {
         #expect(editor.nonAgentTimelineMutationRevision == initialRevision + 1)
 
         let revision = editor.nonAgentTimelineMutationRevision
-        Analytics.$origin.withValue(.init(source: "agent", sessionID: "test")) {
+        AgentMutationScope.$isActive.withValue(true) {
             editor.timeline.tracks.append(Fixtures.audioTrack())
         }
         #expect(editor.nonAgentTimelineMutationRevision == revision)

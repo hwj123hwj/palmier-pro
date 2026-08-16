@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Agent providers")
 struct AgentProviderTests {
-    @Test func modelCatalogContainsExactlySupportedModels() {
+    @Test func modelListContainsExactlySupportedModels() {
         #expect(AgentModel.allCases.map { [$0.rawValue, $0.displayName] } == [
             ["claude-sonnet-5", "Sonnet 5"],
             ["claude-opus-5", "Opus 5"],
@@ -19,7 +19,6 @@ struct AgentProviderTests {
         #expect(AgentModel.allCases.map(\.provider) == [
             .anthropic, .anthropic, .anthropic, .openAI, .openAI, .openAI,
         ])
-        #expect(AgentModel.allCases.filter(\.requiresPaidHostedPlan) == [.fable5, .sol])
         let anthropicEfforts: [AgentReasoningEffort] = [.low, .medium, .high, .xHigh, .max]
         let openAIEfforts = AgentReasoningEffort.allCases
         #expect(AgentModel.allCases.filter { $0.provider == .anthropic }
@@ -30,12 +29,11 @@ struct AgentProviderTests {
     }
 
     @Test func routingUsesOnlyTheSelectedProvidersKey() {
+        #expect(route(.sonnet5, key: .anthropic) == .direct)
         #expect(route(.sonnet5, key: .openAI) == .unavailable)
+        #expect(route(.luna, key: .openAI) == .direct)
         #expect(route(.luna, key: .anthropic) == .unavailable)
-        #expect(route(.fable5, key: .anthropic, hasCredits: true) == .direct)
-        #expect(route(.terra, hasCredits: true) == .hosted)
-        #expect(route(.fable5, hasCredits: true) == .unavailable)
-        #expect(route(.sol, hasCredits: true, isPaid: true) == .hosted)
+        #expect(route(.terra) == .unavailable)
     }
 
     @Test func anthropicReasoningUsesMediumDefaultAndExplicitEffort() throws {
@@ -161,15 +159,10 @@ struct AgentProviderTests {
         }
     }
 
-    private func route(
-        _ model: AgentModel,
-        key: AgentProvider? = nil, hasCredits: Bool = false, isPaid: Bool = false
-    ) -> AgentRoute {
+    private func route(_ model: AgentModel, key: AgentProvider? = nil) -> AgentRoute {
         AgentRouting.route(
             model: model,
-            credentials: AgentCredentialSnapshot(key.map { [$0: "key"] } ?? [:]),
-            hasHostedCredits: hasCredits, hasPaidPlan: isPaid
-        )
+            credentials: AgentCredentialSnapshot(key.map { [$0: "key"] } ?? [:]))
     }
 
     private func openAIBody(

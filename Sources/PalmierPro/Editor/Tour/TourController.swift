@@ -11,9 +11,8 @@ struct TourStep: Equatable {
     }
     enum Prepare: Equatable {
         case none
-        case selectAIEditClip
+        case selectClip
         case revealInspectorOverview
-        case revealAIEditTab
     }
     let kind: Kind
     let title: String
@@ -37,20 +36,15 @@ enum TourTarget: Equatable {
 /// Pinpointable controls. Add a case + its `hostPanel`, then tag the view with `.tourAnchor(_:)`.
 enum TourAnchorID: Hashable {
     case importButton
-    case generateButton
-    case generation
     case smartSearch
     case screenshotButton
     case skillsButton
-    case aiEditTab
-    case aiEditPanel
 
     var hostPanel: EditorViewModel.FocusedPanel {
         switch self {
-        case .importButton, .generateButton, .generation, .smartSearch: return .media
+        case .importButton, .smartSearch: return .media
         case .screenshotButton: return .preview
         case .skillsButton: return .agent
-        case .aiEditTab, .aiEditPanel: return .inspector
         }
     }
 }
@@ -72,7 +66,7 @@ final class TourController {
     /// Live backing views for `.element` targets, registered by `.tourAnchor(_:)`.
     @ObservationIgnored var anchorViews: [TourAnchorID: WeakView] = [:]
     /// Bumped when an anchor view lays out, so the split controller recomputes the
-    /// frame for controls that appear/animate inside a panel (e.g. the generation panel).
+    /// frame for controls that appear/animate inside a panel.
     private(set) var anchorRevision = 0
     func anchorDidLayout() { anchorRevision &+= 1 }
     @ObservationIgnored private weak var editor: EditorViewModel?
@@ -124,9 +118,6 @@ final class TourController {
             case .inspector: editor.inspectorPanelVisible = true
             case .timeline, .preview: break
             }
-            editor.showGenerationPanel = (target == .element(.generation))
-        } else {
-            editor.showGenerationPanel = false
         }
         applyPrepare(step.prepare, to: editor)
         stepIndex = index
@@ -136,24 +127,20 @@ final class TourController {
         switch prepare {
         case .none:
             editor.inspectorClipTabRequest = nil
-        case .selectAIEditClip:
+        case .selectClip:
             editor.inspectorPanelVisible = true
-            selectAIEditClip(in: editor)
+            selectVisualClip(in: editor)
             editor.inspectorClipTabRequest = nil
         case .revealInspectorOverview:
             editor.inspectorPanelVisible = true
-            selectAIEditClip(in: editor)
+            selectVisualClip(in: editor)
             editor.inspectorClipTabRequest = .video
-        case .revealAIEditTab:
-            editor.inspectorPanelVisible = true
-            selectAIEditClip(in: editor)
-            editor.inspectorClipTabRequest = .ai
         }
     }
 
-    private func selectAIEditClip(in editor: EditorViewModel) {
-        guard let clipId = Self.firstAIEditVisualClipId(in: editor) else { return }
-        // Replace selection so a prior multi-select cannot hide AI Edit.
+    private func selectVisualClip(in editor: EditorViewModel) {
+        guard let clipId = Self.firstVisualClipId(in: editor) else { return }
+        // Replace selection so a prior multi-select cannot hide the inspector content.
         editor.selectedGap = nil
         editor.selectedTimelineRange = nil
         editor.selectedClipIds = editor.expandToLinkGroup([clipId])
@@ -162,7 +149,7 @@ final class TourController {
     // MARK: - Step list
 
     private static func makeSteps(editor: EditorViewModel) -> [TourStep] {
-        let hasAIEditClip = firstAIEditVisualClipId(in: editor) != nil
+        let hasVisualClip = firstVisualClipId(in: editor) != nil
 
         var steps: [TourStep] = [
             TourStep(kind: .intro, title: L10n.string("Tutorial"),
@@ -171,10 +158,6 @@ final class TourController {
                      instruction: L10n.string("This is where all your footage and assets live.")),
             TourStep(kind: .spotlight(.element(.importButton)), title: L10n.string("Import footage"),
                      instruction: L10n.string("Import your footage here, or drag and drop, or copy-paste, into the media panel.")),
-            TourStep(kind: .spotlight(.element(.generateButton)), title: L10n.string("Generate"),
-                     instruction: L10n.string("Click Generate to open the generation panel.")),
-            TourStep(kind: .spotlight(.element(.generation)), title: L10n.string("Generation panel"),
-                     instruction: L10n.string("Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame.")),
         ]
         if smartSearchAvailable(editor: editor) {
             steps.append(TourStep(kind: .spotlight(.element(.smartSearch)), title: L10n.string("Smart search"),
@@ -184,31 +167,25 @@ final class TourController {
             TourStep(kind: .spotlight(.panel(.preview)), title: L10n.string("Preview"),
                      instruction: L10n.string("This is your preview panel to play a selected media or the whole timeline.")),
             TourStep(kind: .spotlight(.element(.screenshotButton)), title: L10n.string("Screenshot a frame"),
-                     instruction: L10n.string("Take a screenshot of the preview and use it as a reference for generation. Particularly useful for creating AI transitions.")),
+                     instruction: L10n.string("Take a screenshot of the preview to add it to your media.")),
             TourStep(
                 kind: .spotlight(.panel(.timeline)),
                 title: L10n.string("Timeline"),
-                instruction: hasAIEditClip
+                instruction: hasVisualClip
                     ? L10n.string("Your timeline: the top half is video, the bottom half is audio. Click a clip to inspect it — we've selected one for you.")
                     : L10n.string("Your timeline: the top half is video, the bottom half is audio. This is where you edit."),
-                prepare: hasAIEditClip ? .selectAIEditClip : .none
+                prepare: hasVisualClip ? .selectClip : .none
             ),
         ]
-        if hasAIEditClip {
-            steps += [
+        if hasVisualClip {
+            steps.append(
                 TourStep(
                     kind: .spotlight(.panel(.inspector)),
                     title: L10n.string("Inspector"),
                     instruction: L10n.string("Your inspector for the selected clip — transform, adjust, audio, and more."),
                     prepare: .revealInspectorOverview
-                ),
-                TourStep(
-                    kind: .spotlight(.element(.aiEditPanel)),
-                    title: L10n.string("AI Edit"),
-                    instruction: L10n.string("Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip."),
-                    prepare: .revealAIEditTab
-                ),
-            ]
+                )
+            )
         } else {
             steps.append(
                 TourStep(kind: .spotlight(.panel(.inspector)), title: L10n.string("Inspector"),
@@ -217,7 +194,7 @@ final class TourController {
         }
         steps += [
             TourStep(kind: .spotlight(.panel(.agent)), title: L10n.string("AI agent"),
-                     instruction: L10n.string("Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key.")),
+                     instruction: L10n.string("Chat with your agent! It can edit clips, organize your assets, and much more. Bring your own Anthropic API key.")),
             TourStep(kind: .spotlight(.element(.skillsButton)), title: L10n.string("Skills"),
                      instruction: L10n.string("Open Skills to browse community playbooks, create your own, or add them to other agents.")),
             TourStep(kind: .outro, title: L10n.string("You're all set"),
@@ -233,8 +210,7 @@ final class TourController {
         return editor.mediaAssets.contains { $0.type == .video || $0.type == .image }
     }
 
-    private static func firstAIEditVisualClipId(in editor: EditorViewModel) -> String? {
-        guard !AccountService.shared.isMisconfigured else { return nil }
+    private static func firstVisualClipId(in editor: EditorViewModel) -> String? {
         for track in editor.timeline.tracks {
             for clip in track.clips where clip.mediaType.isVisual && clip.mediaType != .text {
                 if editor.mediaAssetsById[clip.mediaRef] != nil {

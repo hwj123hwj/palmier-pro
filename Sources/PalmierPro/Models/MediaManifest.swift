@@ -29,8 +29,6 @@ struct MediaManifestEntry: Codable, Sendable, Equatable, Identifiable {
     var sourceFPS: Double?
     var hasAudio: Bool?
     var folderId: String?
-    var cachedRemoteURL: String?
-    var cachedRemoteURLExpiresAt: Date?
     var generationStatus: String?
     var importInput: MediaImportInput?
 }
@@ -39,6 +37,13 @@ struct MediaImportInput: Codable, Sendable, Equatable {
     var sourceURL: String? = nil
     var sourcePath: String? = nil
     var createdAt: Date? = nil
+}
+
+/// Upscaler tuning persisted with a generated asset.
+struct UpscaleSettings: Codable, Sendable, Equatable {
+    var selections: [String: String] = [:]
+    var numbers: [String: Double] = [:]
+    var toggles: [String: Bool] = [:]
 }
 
 struct GenerationInput: Codable, Sendable, Equatable {

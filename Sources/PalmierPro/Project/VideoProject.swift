@@ -88,15 +88,7 @@ class VideoProject: NSDocument {
         manifestLoadFailed = contents.manifestUnreadable
         let timelines = loadedProjectFile?.timelines ?? []
         Log.project.notice(
-            "read ok timelines=\(timelines.count)",
-            telemetry: "Project read",
-            data: [
-                "timelines": timelines.count,
-                "tracks": timelines.reduce(0) { $0 + $1.tracks.count },
-                "clips": timelines.reduce(0) { $0 + $1.tracks.reduce(0) { $0 + $1.clips.count } },
-                "media": loadedManifest?.entries.count ?? 0
-            ]
-        )
+            "read ok timelines=\(timelines.count)")
     }
 
     nonisolated static func readProjectPackage(at url: URL) throws -> ProjectPackageContents {
@@ -406,11 +398,6 @@ class VideoProject: NSDocument {
             if let oldURL, let newURL = newValue,
                oldURL.standardizedFileURL != newURL.standardizedFileURL {
                 MainActor.assumeIsolated {
-                    Telemetry.beginOperation("project_url_rebase", data: [
-                        "media_count": editorViewModel.mediaAssets.count,
-                        "registry_count": ProjectRegistry.shared.entries.count,
-                    ])
-                    defer { Telemetry.endOperation("project_url_rebase") }
                     ProjectRegistry.shared.updateURL(from: oldURL, to: newURL)
                     editorViewModel.rebaseProjectURL(from: oldURL, to: newURL)
                 }
@@ -497,12 +484,6 @@ class VideoProject: NSDocument {
         window.standardWindowButton(.documentIconButton)?.isHidden = true
 
         editorViewModel.searchIndex.projectOpened()
-        editorViewModel.updateTelemetryContext()
-        Telemetry.breadcrumb(
-            "Project opened",
-            category: "project",
-            data: editorViewModel.telemetrySnapshot()
-        )
     }
 
     // MARK: - Thumbnail
@@ -651,11 +632,6 @@ class VideoProject: NSDocument {
                     }
                     continue
                 }
-                if asset.isRecoveringGeneration {
-                    asset.generationStatus = .generating
-                    manifestUpdates.append(asset)
-                    continue
-                }
                 Log.project.warning("restore: media file missing id=\(candidate.id) name=\(candidate.name) path=\(candidate.url.path)")
                 missing += 1
                 missingRefs.insert(candidate.id)
@@ -666,10 +642,6 @@ class VideoProject: NSDocument {
                     continue
                 }
                 asset.importInput = nil
-                asset.generationStatus = .none
-                manifestUpdates.append(asset)
-            }
-            if asset.generationStatus != .none, !asset.canResumeGeneration {
                 asset.generationStatus = .none
                 manifestUpdates.append(asset)
             }
@@ -684,11 +656,8 @@ class VideoProject: NSDocument {
 
         editorViewModel.updateManifestMetadata(for: manifestUpdates)
         editorViewModel.missingMediaRefs = missingRefs
-        editorViewModel.generationService.resumePendingGenerations(editor: editorViewModel)
         Log.project.notice(
-            "restore ok restored=\(restored) missing=\(missing)",
-            telemetry: "Media restored",
-            data: ["restored": restored, "missing": missing, "manifestEntries": manifestEntries]
+            "restore ok restored=\(restored) missing=\(missing)"
         )
     }
 }

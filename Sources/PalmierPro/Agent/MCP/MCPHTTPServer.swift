@@ -4,7 +4,7 @@ import Network
 
 struct MCPServerInstance: Sendable {
     let server: Server
-    let onInitialize: @Sendable (Client.Info) async -> Void
+    var onInitialize: @Sendable (Client.Info) async -> Void = { _ in }
 }
 
 /// HTTP server for MCP. Each client session gets its own `Server` + stateful transport
@@ -182,7 +182,7 @@ actor MCPHTTPServer {
                 try await server.notify(ToolListChangedNotification.message())
             } catch {
                 Log.mcp.warning("tool list_changed notify failed id=\(sessionID): \(error.localizedDescription)")
-                await self.resetToolListAnnouncement(sessionID: sessionID)
+                self.resetToolListAnnouncement(sessionID: sessionID)
             }
         }
     }

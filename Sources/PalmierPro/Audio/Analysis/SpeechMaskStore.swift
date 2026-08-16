@@ -32,8 +32,7 @@ final class SpeechMaskStore {
             } catch {
                 if VoiceActivity.isDamagedMedia(error) {
                     Log.preview.error(
-                        "vad failed mediaRef=\(key): \(Log.detail(error))",
-                        telemetry: "VAD media decode failed"
+                        "vad failed mediaRef=\(key): \(Log.detail(error))"
                     )
                 } else {
                     Log.preview.info("vad unavailable mediaRef=\(key): \(Log.detail(error))")

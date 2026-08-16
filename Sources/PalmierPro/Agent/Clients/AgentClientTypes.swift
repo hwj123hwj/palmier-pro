@@ -99,10 +99,6 @@ enum AgentModel: String, CaseIterable, Codable, Sendable {
 
     var maxOutputTokens: Int { 64_000 }
 
-    var requiresPaidHostedPlan: Bool {
-        self == .fable5 || self == .sol
-    }
-
     static func persisted(_ rawValue: String) -> AgentModel? {
         rawValue == "claude-opus-4-8" ? .opus5 : AgentModel(rawValue: rawValue)
     }
@@ -143,20 +139,15 @@ enum AgentReasoningPreferences {
 
 enum AgentRoute: Equatable, Sendable {
     case direct
-    case hosted
     case unavailable
 }
 
 enum AgentRouting {
     static func route(
         model: AgentModel,
-        credentials: AgentCredentialSnapshot,
-        hasHostedCredits: Bool,
-        hasPaidPlan: Bool
+        credentials: AgentCredentialSnapshot
     ) -> AgentRoute {
-        if !credentials[model.provider].isEmpty { return .direct }
-        if model.requiresPaidHostedPlan && !hasPaidPlan { return .unavailable }
-        return hasHostedCredits ? .hosted : .unavailable
+        credentials[model.provider].isEmpty ? .unavailable : .direct
     }
 }
 
@@ -213,18 +204,6 @@ struct AgentRequestContext: Equatable, Sendable {
     let inputMessageID: UUID
     let outputMessageID: UUID
     let projectID: String?
-
-    func apply(to request: inout URLRequest, telemetryEnabled: Bool) {
-        request.setValue(conversationID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Conversation-Id")
-        request.setValue(traceID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Trace-Id")
-        request.setValue(spanID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Span-Id")
-        request.setValue(inputMessageID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Input-Message-Id")
-        request.setValue(outputMessageID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Output-Message-Id")
-        if let projectID, !projectID.isEmpty {
-            request.setValue(projectID, forHTTPHeaderField: "X-Palmier-Project-Id")
-        }
-        request.setValue(telemetryEnabled ? "1" : "0", forHTTPHeaderField: "X-Palmier-Agent-Telemetry")
-    }
 }
 
 enum AgentStreamEvent: Equatable, Sendable {
@@ -236,6 +215,12 @@ enum AgentStreamEvent: Equatable, Sendable {
     case textDelta(String)
     case toolUseComplete(id: String, name: String, inputJSON: String)
     case messageStop(stopReason: AgentStopReason)
+}
+
+enum AgentServiceError: Error {
+    case unavailable(AgentModel)
+    case refusal(AgentModel)
+    case upstream(String)
 }
 
 enum AgentClientTransportError: LocalizedError {

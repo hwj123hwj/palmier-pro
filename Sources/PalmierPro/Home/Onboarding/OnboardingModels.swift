@@ -1,13 +1,7 @@
 import Foundation
 
 enum OnboardingStep: Int {
-    case welcome, discovery, profile, account
-}
-
-enum OnboardingSampleState: Equatable {
-    case idle
-    case loading
-    case failed
+    case welcome, discovery, profile
 }
 
 struct OnboardingOption: Identifiable {

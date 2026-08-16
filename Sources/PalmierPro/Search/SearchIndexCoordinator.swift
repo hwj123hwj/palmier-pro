@@ -83,9 +83,7 @@ final class SearchIndexCoordinator {
 
     func projectOpened() {
         Log.search.notice(
-            "index project opened enabled=\(VisualModelLoader.shared.enabled)",
-            telemetry: "Search index project opened",
-            data: ["enabled": VisualModelLoader.shared.enabled]
+            "index project opened enabled=\(VisualModelLoader.shared.enabled)"
         )
         Task {
             await VisualModelLoader.shared.prepare()
@@ -100,14 +98,7 @@ final class SearchIndexCoordinator {
         failedIds.removeAll()
         let assets = assetsProvider()
         Log.search.notice(
-            "index sweep assets=\(assets.count) queuedBefore=\(queue.count)",
-            telemetry: "Search index sweep",
-            data: [
-                "assets": assets.count,
-                "ready": VisualModelLoader.shared.isReady,
-                "queuedBefore": queue.count
-            ]
-        )
+            "index sweep assets=\(assets.count) queuedBefore=\(queue.count)")
         for asset in assets {
             schedule(asset)
         }
@@ -166,9 +157,7 @@ final class SearchIndexCoordinator {
         workerGeneration += 1
         let generation = workerGeneration
         Log.search.notice(
-            "index worker start generation=\(generation) depth=\(queue.count)",
-            telemetry: "Search index worker started",
-            data: ["generation": generation, "queueDepth": queue.count, "batchTotal": batchTotal]
+            "index worker start generation=\(generation) depth=\(queue.count)"
         )
         worker = Task(priority: .utility) { [weak self] in
             while let self, !Task.isCancelled, let work = self.dequeue() {

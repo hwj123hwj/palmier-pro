@@ -13,9 +13,6 @@ final class ToolExecutor {
     private let frontmostProjectProvider: (() -> VideoProject?)?
     // External MCP stays on this project until manage_project rebinds it.
     private weak var boundProject: VideoProject?
-    private var mcpClientInfo: MCPClientInfo?
-    private(set) var mcpSessionActivation = Analytics.SessionActivation()
-    private let analyticsSessionID = UUID().uuidString
     let exportQueue: ExportQueue
     let skillStore: SkillStore
 
@@ -61,11 +58,6 @@ final class ToolExecutor {
         lastTranscriptSession = nil
     }
 
-    func setMCPClientInfo(_ clientInfo: MCPClientInfo) {
-        mcpClientInfo = clientInfo
-    }
-
-    var feedbackState = FeedbackState()
     var lastTranscriptSession: TranscriptSession?
 
     func execute(
@@ -74,79 +66,38 @@ final class ToolExecutor {
         source: String = "agent",
         sessionID: String? = nil
     ) async -> ToolResult {
-        let origin = Analytics.Origin(source: source, sessionID: sessionID ?? analyticsSessionID)
-        return await Analytics.$origin.withValue(origin) {
-            await executeWithOrigin(name: name, args: args, origin: origin)
+        await AgentMutationScope.$isActive.withValue(true) {
+            await executeTool(name: name, args: args, source: source)
         }
     }
 
-    static func droppingAutofilledBlanks(from args: [String: Any]) -> [String: Any] {
-        args.filter { !($0.value is NSNull) && ($0.value as? String) != "" }
-    }
-
-    private func executeWithOrigin(
+    private func executeTool(
         name: String,
         args: [String: Any],
-        origin: Analytics.Origin
+        source: String
     ) async -> ToolResult {
         let args = Self.droppingAutofilledBlanks(from: args)
         let started = ContinuousClock.now
         guard let tool = ToolName(rawValue: name),
-              origin.source != "mcp"
+              source != "mcp"
                 || ToolDefinitions.mcpServer.contains(where: { $0.name == tool }) else {
-            let result = ToolResult.error("Unknown tool: \(name)")
-            captureToolAnalytics(
-                toolName: name,
-                origin: origin,
-                projectId: editor?.projectId,
-                result: result,
-                started: started,
-                failureReason: "unknown_tool"
-            )
-            return result
+            return ToolResult.error("Unknown tool: \(name)")
         }
-        activateMCPSessionIfNeeded(source: origin.source, toolName: tool.rawValue)
 
         // project tools act on AppState before editor is available
         switch tool {
         case .manageProject:
-            let result = await manageProject(args)
-            captureToolAnalytics(
-                toolName: tool.rawValue,
-                origin: origin,
-                projectId: editor?.projectId,
-                result: result,
-                started: started
-            )
-            return result
+            return await manageProject(args)
         default:
             break
         }
 
         if !Self.canReadInactiveProject(tool), let error = projectFocusError() {
-            let result = ToolResult.error(error)
-            captureToolAnalytics(
-                toolName: tool.rawValue,
-                origin: origin,
-                projectId: editor?.projectId,
-                result: result,
-                started: started,
-                failureReason: "project_inactive"
-            )
-            return result
+            return ToolResult.error(error)
         }
 
         guard let editor else {
-            let result = ToolResult.error("Editor not available")
-            captureToolAnalytics(
-                toolName: tool.rawValue,
-                origin: origin,
-                projectId: nil,
-                result: result,
-                started: started,
-                failureReason: "editor_unavailable"
-            )
-            return result
+            return ToolResult.error("Editor not available")
         }
         let activeTimelineIdBefore = editor.activeTimelineId
         let nonAgentMutationRevisionBefore = editor.nonAgentTimelineMutationRevision
@@ -154,11 +105,7 @@ final class ToolExecutor {
         let idsBefore = currentIdUniverse(editor)
         let result: ToolResult
         var readRevision: Int?
-        Log.agent.notice(
-            "tool start name=\(tool.rawValue)",
-            telemetry: "Agent tool started",
-            data: ["tool": tool.rawValue, "projectId": editor.projectId ?? "unknown"]
-        )
+        Log.agent.notice("tool start name=\(tool.rawValue)")
         do {
             let resolved = try expandingIdPrefixes(in: args, editor: editor)
             readRevision = editor.beginAgentTimelineRead(
@@ -186,54 +133,18 @@ final class ToolExecutor {
                 editor: editor
             )
         }
-        feedbackState.record(result, for: tool)
         let elapsed = started.duration(to: .now).seconds
-        let telemetry = result.isError ? "Agent tool failed" : "Agent tool finished"
-        let payload: Telemetry.Payload = [
-            "tool": tool.rawValue,
-            "durationSeconds": elapsed,
-            "timelineChanged": timelineChanged
-        ]
         if result.isError {
-            Log.agent.warning(
-                "tool failed name=\(tool.rawValue) duration=\(elapsed)",
-                telemetry: telemetry,
-                data: payload
-            )
+            Log.agent.warning("tool failed name=\(tool.rawValue) duration=\(elapsed)")
         } else {
-            Log.agent.notice(
-                "tool ok name=\(tool.rawValue) duration=\(elapsed)",
-                telemetry: telemetry,
-                data: payload
-            )
+            Log.agent.notice("tool ok name=\(tool.rawValue) duration=\(elapsed)")
         }
-        captureToolAnalytics(
-            toolName: tool.rawValue,
-            origin: origin,
-            projectId: editor.projectId,
-            result: result,
-            started: started,
-            timelineChanged: timelineChanged
-        )
         // Shorten on pre ∪ post ids: new ids and just-removed ids both stay short.
         return await shorteningIds(in: result, editor: editor, alsoKnown: idsBefore)
     }
 
-    private func activateMCPSessionIfNeeded(source: String, toolName: String) {
-        guard source == "mcp", mcpSessionActivation.activate() else { return }
-        Analytics.capture(.mcpSessionActivated, properties: mcpSessionActivationProperties(toolName: toolName))
-    }
-
-    func mcpSessionActivationProperties(toolName: String) -> Analytics.Payload {
-        var properties: Analytics.Payload = [
-            "source": "mcp",
-            "session_id": analyticsSessionID,
-            "tool_name": toolName,
-        ]
-        if let mcpClientInfo {
-            properties["client_info"] = mcpClientInfo.payload
-        }
-        return properties
+    static func droppingAutofilledBlanks(from args: [String: Any]) -> [String: Any] {
+        args.filter { !($0.value is NSNull) && ($0.value as? String) != "" }
     }
 
     private func projectFocusError() -> String? {
@@ -249,67 +160,11 @@ final class ToolExecutor {
     private static func canReadInactiveProject(_ tool: ToolName) -> Bool {
         switch tool {
         case .getTimeline, .inspectTimeline, .getMedia, .inspectMedia, .searchMedia,
-             .getMulticam, .getTranscript, .detectBeats, .inspectColor, .listModels, .sendFeedback:
+             .getMulticam, .getTranscript, .detectBeats, .inspectColor:
             true
         default:
             false
         }
-    }
-
-    private func captureToolAnalytics(
-        toolName: String,
-        origin: Analytics.Origin,
-        projectId: String?,
-        result: ToolResult,
-        started: ContinuousClock.Instant? = nil,
-        timelineChanged: Bool? = nil,
-        failureReason: String? = nil
-    ) {
-        var payload: [String: Any] = [
-            "tool_name": toolName,
-            "source": origin.source,
-            "project_id": projectId ?? "unknown",
-            "session_id": origin.sessionID,
-            "status": result.isError ? "failed" : "finished",
-        ]
-        if let started {
-            payload["tool_duration_seconds"] = durationSeconds(since: started)
-        }
-        if let timelineChanged {
-            payload["timeline_changed"] = timelineChanged
-        }
-        if let failureReason = failureReason ?? (result.isError ? "tool_error" : nil) {
-            payload["failure_reason"] = failureReason
-        }
-        if let errorMessage = Self.sanitizedToolErrorMessage(result) {
-            payload["error_message"] = errorMessage
-        }
-        Analytics.capture(.agentToolCalled, properties: payload)
-    }
-
-    static func sanitizedToolErrorMessage(_ result: ToolResult) -> String? {
-        guard result.isError else { return nil }
-        let message = result.content.compactMap { block -> String? in
-            guard case .text(let text) = block else { return nil }
-            return text
-        }.joined(separator: "\n")
-        guard !message.isEmpty else { return nil }
-        return String(message.prefix(2_048))
-            .replacingOccurrences(
-                of: #"(?:https?|file)://[^\s\"']+"#,
-                with: "[url redacted]",
-                options: .regularExpression
-            )
-            .replacingOccurrences(
-                of: #"/(?:Users|Volumes|private|tmp)(?:/[^\r\n]*)?"#,
-                with: "[path redacted]",
-                options: .regularExpression
-            )
-    }
-
-    private func durationSeconds(since started: ContinuousClock.Instant) -> Double {
-        let duration = started.duration(to: .now)
-        return Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
     }
 
     private func run(_ tool: ToolName, _ editor: EditorViewModel, _ args: [String: Any]) async throws -> ToolResult {
@@ -351,14 +206,8 @@ final class ToolExecutor {
         case .addCaptions:   return try await addCaptions(editor, args)
         case .exportProject: return try await exportProject(editor, args)
         case .manageExports: return try manageExports(editor, args)
-        case .generateVideo: return try generate(editor, args, type: .video)
-        case .generateImage: return try generate(editor, args, type: .image)
-        case .generateAudio: return try await generateAudio(editor, args)
-        case .upscaleMedia:  return try upscaleMedia(editor, args)
         case .importMedia:   return try await importMedia(editor, args)
-        case .listModels:    return listModels(args)
         case .organizeMedia: return try organizeMedia(editor, args)
-        case .sendFeedback:  return try await sendFeedback(editor, args)
         case .setProjectSettings: return try setProjectSettings(editor, args)
         case .createTimeline:     return try createTimeline(editor, args)
         case .setActiveTimeline:  return try setActiveTimeline(editor, args)
@@ -377,11 +226,6 @@ final class ToolExecutor {
         guard let body = skillStore.body(for: id) else {
             return .error("Unknown skill: \(id)")
         }
-        Analytics.captureSkillRead(
-            skillID: id,
-            skillSHA: skillStore.contentSHA(for: id),
-            skillOrigin: skillStore.origin(for: id).rawValue
-        )
         return .ok(body)
     }
 

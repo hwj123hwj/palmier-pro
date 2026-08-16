@@ -1,5 +1,4 @@
 import AppKit
-import ClerkKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -16,9 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Activate the app (required when launched from CLI, not a .app bundle)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-
-        // Start Sparkle updater
-        _ = Updater.shared
 
         HomeWindowController.shared.showWindow(nil)
         SkillStore.shared.startSkillSync()
@@ -102,35 +98,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try process.run()
     }
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls {
-            Task { @MainActor in
-                do {
-                    let handled = try await Clerk.shared.handle(url)
-                    Log.account.notice(
-                        "auth callback \(handled ? "handled" : "ignored") url=\(Self.safeURLDescription(url))",
-                        telemetry: "Auth callback received",
-                        data: ["handled": handled, "url": Self.safeURLDescription(url)]
-                    )
-                } catch {
-                    Log.account.warning(
-                        "auth callback failed url=\(Self.safeURLDescription(url)) error=\(Log.detail(error))",
-                        telemetry: "Auth callback failed",
-                        data: ["error": error.localizedDescription, "url": Self.safeURLDescription(url)]
-                    )
-                }
-            }
-        }
-    }
-
-    private static func safeURLDescription(_ url: URL) -> String {
-        var components = URLComponents()
-        components.scheme = url.scheme
-        components.host = url.host
-        components.path = url.path
-        return components.string ?? url.scheme ?? "unknown"
-    }
-
     @MainActor
     @objc func newProject(_ sender: Any?) {
         AppState.shared.createProjectInteractively()
@@ -154,11 +121,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     @objc func showMCPInstructions(_ sender: Any?) {
         HelpWindowController.shared.show(tab: .mcp)
-    }
-
-    @MainActor
-    @objc func showFeedback(_ sender: Any?) {
-        FeedbackWindowController.shared.show()
     }
 
     @MainActor

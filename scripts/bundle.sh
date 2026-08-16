@@ -2,135 +2,44 @@
 set -euo pipefail
 
 # Usage:
-#   scripts/bundle.sh [release|debug]           # ad-hoc signed dev build
-#   scripts/bundle.sh debug --fast              # fastest: skip dSYM + deep sign, just env+build
-#   scripts/bundle.sh debug --speech             # include bundled speech and MLX
-#   scripts/bundle.sh debug --telemetry          # include production telemetry
-#   scripts/bundle.sh debug --all                # include all optional traits
-#   scripts/bundle.sh release --sign            # build + Developer ID codesign
-#   scripts/bundle.sh release --dist            # build + sign + notarize + staple + DMG
+#   scripts/bundle.sh [release|debug]   # ad-hoc signed personal build
+#   scripts/bundle.sh debug --fast      # skip dSYM generation
+#   scripts/bundle.sh debug --speech    # include bundled speech and MLX
 
 CONFIG="release"
-MODE="dev"
-ENABLE_ALL_TRAITS=false
+FAST=false
 INCLUDE_BUNDLED_SPEECH=false
-INCLUDE_PRODUCTION_TELEMETRY=false
 for arg in "$@"; do
   case "$arg" in
     release|debug) CONFIG="$arg" ;;
-    --fast)        MODE="fast" ;;
-    --sign)        MODE="sign" ;;
-    --dist)        MODE="dist" ;;
+    --fast)        FAST=true ;;
     --speech)      INCLUDE_BUNDLED_SPEECH=true ;;
-    --telemetry)   INCLUDE_PRODUCTION_TELEMETRY=true ;;
-    --all)
-      ENABLE_ALL_TRAITS=true
-      INCLUDE_BUNDLED_SPEECH=true
-      INCLUDE_PRODUCTION_TELEMETRY=true
-      ;;
     *) echo "unknown arg: $arg" >&2; exit 1 ;;
   esac
 done
 
-if [ "$CONFIG" = "release" ]; then
-  ENABLE_ALL_TRAITS=true
-  INCLUDE_BUNDLED_SPEECH=true
-  INCLUDE_PRODUCTION_TELEMETRY=true
-fi
-
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-ENV_FILE=".env"
-if [ "$CONFIG" = "release" ] && [ -f "$ROOT/.env.prod" ]; then
-  ENV_FILE=".env.prod"
-fi
-if [ -f "$ROOT/$ENV_FILE" ]; then
-  echo "==> Loading $ENV_FILE"
-  set -a
-  # shellcheck disable=SC1091
-  . "$ROOT/$ENV_FILE"
-  set +a
-fi
-
-SIGNING_IDENTITY="${SIGNING_IDENTITY:-Developer ID Application: Palmier, Inc. (MMFLRC7562)}"
-NOTARY_PROFILE="${NOTARY_PROFILE:-palmier-notary}"
-SENTRY_DSN="${SENTRY_DSN:-}"
-POSTHOG_PROJECT_TOKEN="${POSTHOG_PROJECT_TOKEN:-}"
-POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
-PROVISION_PROFILE="${PROVISION_PROFILE:-$ROOT/scripts/Palmier_Pro_Developer_ID.provisionprofile}"
-ENTITLEMENTS="$ROOT/scripts/PalmierPro.entitlements"
-KEYCHAIN_ACCESS_GROUP="${KEYCHAIN_ACCESS_GROUP:-MMFLRC7562.io.palmier.pro}"
 RESOURCES="$ROOT/Sources/PalmierPro/Resources"
 APP="$ROOT/.build/PalmierPro.app"
-ZIP="$ROOT/.build/PalmierPro.zip"
-DMG="$ROOT/.build/PalmierPro.dmg"
 
 BUILD_ARGS=(-c "$CONFIG")
-if $ENABLE_ALL_TRAITS; then
-  TRAITS="all"
-  BUILD_ARGS+=(--enable-all-traits)
-else
-  TRAITS=""
-  if $INCLUDE_BUNDLED_SPEECH; then
-    TRAITS="BundledSpeech"
-  fi
-  if $INCLUDE_PRODUCTION_TELEMETRY; then
-    if [ -n "$TRAITS" ]; then
-      TRAITS="$TRAITS,ProductionTelemetry"
-    else
-      TRAITS="ProductionTelemetry"
-    fi
-  fi
-  if [ -n "$TRAITS" ]; then
-    BUILD_ARGS+=(--traits "$TRAITS")
-  fi
+TRAITS=""
+if $INCLUDE_BUNDLED_SPEECH; then
+  TRAITS="BundledSpeech"
+  BUILD_ARGS+=(--traits "$TRAITS")
 fi
 
 echo "==> Building ($CONFIG, traits: ${TRAITS:-none})"
 swift build "${BUILD_ARGS[@]}"
 BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/PalmierPro"
-SPARKLE_FW="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 
 echo "==> Assembling $APP"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/PalmierPro"
 cp "$RESOURCES/Info.plist" "$APP/Contents/Info.plist"
-
-if [ -n "$SENTRY_DSN" ]; then
-  echo "==> Injecting SentryDSN into Info.plist"
-  /usr/libexec/PlistBuddy -c "Delete :SentryDSN" "$APP/Contents/Info.plist" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :SentryDSN string $SENTRY_DSN" "$APP/Contents/Info.plist"
-else
-  echo "==> SENTRY_DSN not set — telemetry will be a no-op in this build"
-fi
-
-if [ -n "$POSTHOG_PROJECT_TOKEN" ]; then
-  echo "==> Injecting PostHog analytics config into Info.plist"
-  /usr/libexec/PlistBuddy -c "Delete :PostHogProjectToken" "$APP/Contents/Info.plist" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :PostHogProjectToken string $POSTHOG_PROJECT_TOKEN" "$APP/Contents/Info.plist"
-  /usr/libexec/PlistBuddy -c "Delete :PostHogHost" "$APP/Contents/Info.plist" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :PostHogHost string $POSTHOG_HOST" "$APP/Contents/Info.plist"
-else
-  echo "==> POSTHOG_PROJECT_TOKEN not set — product analytics will be a no-op in this build"
-fi
-
-inject_plist() {
-  local key="$1" value="$2"
-  if [ -z "$value" ]; then
-    echo "!! $key not set in $ENV_FILE — app will fatalError on launch" >&2
-    return
-  fi
-  /usr/libexec/PlistBuddy -c "Delete :$key" "$APP/Contents/Info.plist" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :$key string $value" "$APP/Contents/Info.plist"
-}
-
-echo "==> Injecting backend config into Info.plist"
-inject_plist PalmierClerkPublishableKey "${CLERK_PUBLISHABLE_KEY:-}"
-inject_plist PalmierConvexDeploymentURL "${CONVEX_DEPLOYMENT_URL:-}"
-inject_plist PalmierConvexHttpURL "${CONVEX_HTTP_URL:-}"
 cp "$RESOURCES/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
-cp -R "$SPARKLE_FW" "$APP/Contents/Frameworks/Sparkle.framework"
 
 # Flatten SwiftPM's resource bundle into the app's Resources tree.
 RES_BUNDLE="$(dirname "$BIN")/PalmierPro_PalmierPro.bundle"
@@ -173,12 +82,6 @@ if [ "$LOCALIZATION_COUNT" -eq 0 ]; then
   echo "!! no compiled localizations in SwiftPM resource bundle at $RES_BUNDLE" >&2
   exit 1
 fi
-if [ -d "$RES_BUNDLE/Changelog" ]; then
-  cp -R "$RES_BUNDLE/Changelog" "$APP/Contents/Resources/"
-else
-  echo "!! missing Changelog/ in SwiftPM resource bundle at $RES_BUNDLE" >&2
-  exit 1
-fi
 if [ -d "$RES_BUNDLE/Models" ]; then
   cp -R "$RES_BUNDLE/Models" "$APP/Contents/Resources/"
 else
@@ -186,11 +89,17 @@ else
   exit 1
 fi
 
-if ! ls "$RES_BUNDLE"/*.metallib >/dev/null 2>&1; then
-  echo "!! no .metallib in SwiftPM resource bundle at $RES_BUNDLE — Metal effects would be missing" >&2
+# CI kernels: compiled .metallib bytes or runtime-compiled source (see CIKernelLoader).
+CIKERNEL_COUNT=0
+for kernel in "$RES_BUNDLE"/*.cikernel; do
+  [ -f "$kernel" ] || continue
+  cp "$kernel" "$APP/Contents/Resources/"
+  CIKERNEL_COUNT=$((CIKERNEL_COUNT + 1))
+done
+if [ "$CIKERNEL_COUNT" -eq 0 ]; then
+  echo "!! no .cikernel in SwiftPM resource bundle at $RES_BUNDLE — Metal effects would be missing" >&2
   exit 1
 fi
-cp "$RES_BUNDLE"/*.metallib "$APP/Contents/Resources/"
 
 if $INCLUDE_BUNDLED_SPEECH; then
   MLX_METALLIB="$ROOT/.build/$CONFIG/mlx.metallib"
@@ -206,134 +115,19 @@ if $INCLUDE_BUNDLED_SPEECH; then
   cp "$MLX_METALLIB" "$APP/Contents/Resources/mlx-swift_Cmlx.bundle/default.metallib"
 fi
 
-install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/PalmierPro"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/PalmierPro" 2>/dev/null || true
 touch "$APP"
 
-if [ "$MODE" = "fast" ]; then
-  echo "==> Codesigning main app with $SIGNING_IDENTITY (no timestamp, no helpers)"
-  codesign --force --sign "$SIGNING_IDENTITY" "$APP"
-  codesign --verify --deep --strict --verbose=2 "$APP"
-  echo "==> Done: $APP (fast mode — stable identity, no dSYM)"
-  exit 0
-fi
-
-DSYM="$ROOT/.build/PalmierPro.dSYM"
-echo "==> Generating dSYM"
-rm -rf "$DSYM"
-dsymutil "$APP/Contents/MacOS/PalmierPro" -o "$DSYM"
-
-upload_dsyms() {
-  if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
-    echo "==> Sentry creds not set — skipping dSYM upload"
-    return
-  fi
-  if ! command -v sentry-cli >/dev/null 2>&1; then
-    echo "!! sentry-cli not found in PATH — skipping dSYM upload"
-    return
-  fi
-  echo "==> Uploading dSYM to Sentry"
-  sentry-cli debug-files upload --include-sources "$DSYM" || echo "!! sentry-cli upload failed (continuing)"
-}
-
-if [ "$MODE" = "dev" ]; then
-  echo "==> Ad-hoc signing dev app"
-  codesign --force --deep --sign - "$APP"
-  codesign --verify --strict --verbose=2 "$APP"
-  upload_dsyms
-  echo "==> Done: $APP (ad-hoc signed)"
-  exit 0
-fi
-
-echo "==> Codesigning nested Sparkle helpers"
-SPARKLE_CURRENT="$APP/Contents/Frameworks/Sparkle.framework/Versions/Current"
-for helper in \
-    "$SPARKLE_CURRENT/Autoupdate" \
-    "$SPARKLE_CURRENT/Updater.app/Contents/MacOS/Updater" \
-    "$SPARKLE_CURRENT/Updater.app" \
-    "$SPARKLE_CURRENT/XPCServices/Downloader.xpc/Contents/MacOS/Downloader" \
-    "$SPARKLE_CURRENT/XPCServices/Downloader.xpc" \
-    "$SPARKLE_CURRENT/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
-    "$SPARKLE_CURRENT/XPCServices/Installer.xpc"; do
-  [ -e "$helper" ] && codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$helper"
-done
-
-echo "==> Codesigning Sparkle framework"
-codesign --force --options runtime --timestamp \
-  --sign "$SIGNING_IDENTITY" \
-  "$APP/Contents/Frameworks/Sparkle.framework"
-
-echo "==> Embedding provisioning profile + keychain access group"
-if [ ! -f "$PROVISION_PROFILE" ]; then
-  echo "!! provisioning profile not found at $PROVISION_PROFILE" >&2
-  exit 1
-fi
-cp "$PROVISION_PROFILE" "$APP/Contents/embedded.provisionprofile"
-inject_plist PalmierClerkKeychainAccessGroup "$KEYCHAIN_ACCESS_GROUP"
-
-echo "==> Codesigning main app"
-codesign --force --options runtime --timestamp \
-  --entitlements "$ENTITLEMENTS" \
-  --sign "$SIGNING_IDENTITY" \
-  "$APP"
+echo "==> Ad-hoc signing app"
+codesign --force --deep --sign - "$APP"
 codesign --verify --strict --verbose=2 "$APP"
 
-if [ "$MODE" = "sign" ]; then
-  echo "==> Done: $APP (signed, not notarized)"
-  exit 0
+if ! $FAST; then
+  DSYM="$ROOT/.build/PalmierPro.dSYM"
+  echo "==> Generating dSYM"
+  rm -rf "$DSYM"
+  dsymutil "$APP/Contents/MacOS/PalmierPro" -o "$DSYM"
 fi
 
-echo "==> Zipping .app for notarization"
-rm -f "$ZIP"
-/usr/bin/ditto -c -k --keepParent "$APP" "$ZIP"
-
-echo "==> Submitting to Apple notary (this can take several minutes)"
-xcrun notarytool submit "$ZIP" \
-  --keychain-profile "$NOTARY_PROFILE" \
-  --wait
-
-echo "==> Stapling ticket to .app"
-xcrun stapler staple "$APP"
-rm -f "$ZIP"
-
-echo "==> Building DMG"
-rm -f "$DMG"
-STAGING="$(mktemp -d)"
-cp -R "$APP" "$STAGING/PalmierPro.app"
-ln -s /Applications "$STAGING/Applications"
-cp "$RESOURCES/AppIcon.icns" "$STAGING/.VolumeIcon.icns"
-hdiutil create \
-  -volname "PalmierPro" \
-  -srcfolder "$STAGING" \
-  -ov -format UDZO \
-  "$DMG"
-rm -rf "$STAGING"
-
-echo "==> Codesigning DMG"
-codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"
-
-echo "==> Submitting DMG to notary"
-xcrun notarytool submit "$DMG" \
-  --keychain-profile "$NOTARY_PROFILE" \
-  --wait
-
-echo "==> Stapling DMG"
-xcrun stapler staple "$DMG"
-
-upload_dsyms
-
-echo "==> Signing DMG with Sparkle EdDSA key"
-SPARKLE_SIG="$("$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update" "$DMG")"
-
-echo ""
-echo "==> Done"
-echo "   App: $APP"
-echo "   DMG: $DMG"
-echo ""
-echo "Sparkle signature for appcast entry:"
-echo "  $SPARKLE_SIG"
-echo ""
-echo "Add an <item> to appcast.xml with:"
-echo "  - version, shortVersionString from Info.plist"
-echo "  - url pointing at the GitHub Release download"
-echo "  - length=$(stat -f%z "$DMG")"
-echo "  - the sparkle:edSignature from above"
+echo "==> Done: $APP (ad-hoc signed)"
+echo "Install with: cp -R '$APP' /Applications/"

@@ -2,13 +2,11 @@ import SwiftUI
 
 struct CaptionTab: View {
     @Environment(EditorViewModel.self) var editor
-    @Bindable private var account = AccountService.shared
 
     @State private var style: TextStyle = .caption
     @State private var center = AppTheme.Caption.defaultCenter
     @State private var selectedTrackId: String?
     @State private var selectedClipTargets: [String] = []
-    @State private var provider: TranscriptionProvider = .cloud
     @State private var animationPreset: TextAnimation.Preset = .none
     @State private var animationHighlight: TextStyle.RGBA = TextAnimation.defaultHighlight
     @State private var censorProfanity = false
@@ -18,7 +16,6 @@ struct CaptionTab: View {
     @State private var locale: Locale?
     @State private var supportedLocales: [Locale] = []
     @State private var isGenerating = false
-    @State private var estimatedCloudCost: Int?
     @State private var note: String?
     @State private var sourceExpanded = true
     @State private var settingsExpanded = true
@@ -59,32 +56,8 @@ struct CaptionTab: View {
     private var captionTrackIndices: [Int] {
         editor.timeline.tracks.indices.filter { !editor.captionTargets(trackIds: [editor.timeline.tracks[$0].id]).isEmpty }
     }
-    private var remainingCloudCredits: Int? {
-        account.budgetCredits == nil ? nil : account.remainingCredits
-    }
-    private var cloudModeUnavailableMessage: String? {
-        guard provider == .cloud else { return nil }
-        guard account.isSignedIn else { return L10n.string("Sign in to use Cloud.") }
-        return nil
-    }
     private var canGenerateCaptions: Bool {
-        effectiveCount > 0 && !isGenerating && cloudModeUnavailableMessage == nil
-    }
-    private var costEstimateKey: String {
-        "\(provider.rawValue)|\(sourceClipIds.joined(separator: ","))|\(isAutoSource)|\(locale?.identifier ?? "")"
-    }
-    private var costHelpText: String {
-        guard let cost = estimatedCloudCost else {
-            return L10n.string("Estimated cost. Actual billing may differ slightly.")
-        }
-        guard cost > 0 else { return L10n.string("Cached — no credits used.") }
-        guard let remaining = remainingCloudCredits else {
-            return CostEstimator.localizedEstimate(cost)
-        }
-        if cost > remaining {
-            return CostEstimator.localizedInsufficientCredits(cost, remaining: remaining)
-        }
-        return CostEstimator.localizedRemainingCredits(cost, remaining: remaining - cost)
+        effectiveCount > 0 && !isGenerating
     }
 
     private static let translateLanguages = [
@@ -153,16 +126,6 @@ struct CaptionTab: View {
             guard wasSelecting, !isSelecting else { return }
             rememberSelectedClipTargets()
         }
-        .task(id: costEstimateKey) {
-            estimatedCloudCost = nil
-            guard provider == .cloud, effectiveCount > 0 else { return }
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
-            let request = EditorViewModel.CaptionRequest(sourceClipIds: sourceClipIds, autoDetect: isAutoSource, locale: locale, provider: .cloud)
-            let cost = await editor.captionCloudCreditCost(for: request)
-            guard !Task.isCancelled else { return }
-            estimatedCloudCost = cost
-        }
     }
 
     private var previewToggleBar: some View {
@@ -208,11 +171,6 @@ struct CaptionTab: View {
                     selectedClipTargets = []
                 }
             ) { sourceMenu }
-            InspectorRow(
-                label: L10n.string("Mode"),
-                labelHelp: L10n.string("Local runs with Apple's SpeechAnalyzer. Cloud uses credits and a more accurate model with more capabilities."),
-                onReset: { provider = .cloud }
-            ) { providerPicker }
         }
     }
 
@@ -286,10 +244,8 @@ struct CaptionTab: View {
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.mini)
-                    .accessibilityLabel(L10n.string("Censor profanity"))
-                    .tint(AppTheme.Text.primaryColor.opacity(AppTheme.Opacity.strong))
-                    .disabled(provider == .cloud)
-                    .opacity(provider == .cloud ? AppTheme.Opacity.muted : AppTheme.Opacity.opaque)
+                .accessibilityLabel(L10n.string("Censor profanity"))
+                .tint(AppTheme.Text.primaryColor.opacity(AppTheme.Opacity.strong))
             }
         }
     }
@@ -328,39 +284,6 @@ struct CaptionTab: View {
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).focusable(false)
         .frame(maxWidth: .infinity)
-    }
-
-    private var providerPicker: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            providerOption(.local, title: TranscriptionProvider.local.label)
-            providerOption(.cloud, title: TranscriptionProvider.cloud.label)
-        }
-        .fixedSize()
-    }
-
-    private var cloudCreditHelp: String {
-        L10n.string("Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached.")
-    }
-
-    private func providerOption(_ option: TranscriptionProvider, title: String) -> some View {
-        let selected = provider == option
-        return Button {
-            provider = option
-        } label: {
-            HStack(spacing: AppTheme.Spacing.xs) {
-                RadioIndicator(selected: selected, size: AppTheme.IconSize.xxs, innerPadding: AppTheme.Spacing.xxs)
-                Text(L10n.string(key: title))
-                    .font(.system(size: AppTheme.FontSize.sm, weight: selected ? AppTheme.FontWeight.semibold : AppTheme.FontWeight.medium))
-                    .foregroundStyle(selected ? AppTheme.Text.primaryColor : AppTheme.Text.secondaryColor)
-                    .lineLimit(1)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .help(option == .cloud
-            ? cloudCreditHelp
-            : L10n.string("Local runs with Apple's SpeechAnalyzer."))
     }
 
     private func rememberSelectedClipTargets() {
@@ -502,20 +425,13 @@ struct CaptionTab: View {
         EditorActionFooter(message: note) {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Button(action: generate) {
-                    HStack(spacing: AppTheme.Spacing.xs) {
-                        Text(cloudModeUnavailableMessage ?? L10n.string("Generate Captions"))
-                        if cloudModeUnavailableMessage == nil, provider == .cloud, let cost = estimatedCloudCost {
-                            Image(systemName: "dollarsign.circle.fill").font(.system(size: AppTheme.FontSize.xs))
-                            Text(verbatim: "\(cost)").monospacedDigit()
-                        }
-                    }
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+                    Text(L10n.string("Generate Captions"))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.editorPrimary)
                 .focusable(false)
                 .disabled(!canGenerateCaptions)
-                .help(provider == .cloud ? costHelpText : String())
 
                 agentMenu
             }
@@ -534,29 +450,17 @@ struct CaptionTab: View {
             autoDetect: isAutoSource,
             style: style,
             center: center,
-            censorProfanity: provider == .local && censorProfanity,
+            censorProfanity: censorProfanity,
             locale: locale,
             maxWords: maxWords,
             maxCharacters: maxCharacters,
             gapSettings: CaptionGapSettings(maximumGapSeconds: maximumGapSeconds) ?? .default,
-            provider: provider,
             animation: TextAnimation(preset: animationPreset, highlight: animationHighlight)
         )
         Task {
             isGenerating = true
             defer { isGenerating = false }
             do {
-                if request.provider == .cloud {
-                    if let message = cloudUnavailableMessage(cost: nil, provider: request.provider) {
-                        note = message
-                        return
-                    }
-                    let cost = await editor.captionCloudCreditCost(for: request)
-                    if let message = cloudUnavailableMessage(cost: cost, provider: request.provider) {
-                        note = message
-                        return
-                    }
-                }
                 if try await editor.generateCaptions(for: request).isEmpty {
                     note = L10n.string("No speech detected.")
                 } else {
@@ -580,19 +484,6 @@ struct CaptionTab: View {
     private func updateMaxWords(_ value: Double) {
         let count = Int(value.rounded())
         maxWords = count > 0 ? count : nil
-    }
-
-    private func cloudUnavailableMessage(cost: Int?, provider mode: TranscriptionProvider? = nil) -> String? {
-        guard (mode ?? provider) == .cloud else { return nil }
-        guard account.isSignedIn else { return L10n.string("Sign in to use Cloud.") }
-        guard let cost else { return nil }
-        guard cost > 0 else { return nil }
-        guard let remaining = remainingCloudCredits else { return nil }
-        guard remaining > 0 else { return L10n.string("Add credits to use Cloud.") }
-        if cost > remaining {
-            return CostEstimator.localizedInsufficientCredits(cost, remaining: remaining)
-        }
-        return nil
     }
 
     private func localizedCaptionError(_ error: Error) -> String {

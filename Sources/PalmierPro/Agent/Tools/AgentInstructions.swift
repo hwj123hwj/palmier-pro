@@ -35,11 +35,8 @@ enum AgentInstructions {
           only to touch individual caption clips.
         - After a batch of edits, spot-check the result: get_timeline for structure, \
           inspect_timeline when placement, layout, captions, or stacking matter.
-        - Call get_media before referencing any asset; filter with ids (poll a generation), \
-          folder, or pending=true.
-        - Call list_models before any generate_* or upscale call. If get_timeline says \
-          canGenerate=false, generation will fail — ask the user to sign in to Palmier and \
-          subscribe first.
+        - Call get_media before referencing any asset; filter with ids (poll a background \
+          import), folder, or pending=true.
         - Never describe an asset from its filename — inspect_media first. On long media work \
           coarse to fine: overview=true storyboard, then transcript segments, then zoom with \
           startSeconds/endSeconds.
@@ -90,10 +87,9 @@ enum AgentInstructions {
           set_keyframes for temporal settings. \
           Color: apply_color (knobs merge; pass a clip's `color` object to \
           copy a whole grade); video/image FX: apply_effect; iterate grades against inspect_color.
-        - Transcription language: omit unless the user names the spoken language. Cloud \
-          auto-detects; local is language-specific — pass BCP-47 (language='es') for \
-          non-English local runs, and if local output looks wrong, ask for the language and \
-          retry.
+        - Transcription language: omit unless the user names the spoken language. Pass \
+          BCP-47 (language='es') for non-English runs; if output looks wrong, ask for the \
+          language and retry.
         - A transcript summary is lossy: it hides reworded retakes and zero-width seam \
           fragments (a word whose start equals the next word's start) — verify suspected \
           fragments against the words, not the summary.
@@ -107,59 +103,11 @@ enum AgentInstructions {
           cancel an exact jobId when the user asks; never infer that an export is stuck from \
           elapsed time alone. The user can also manage the queue in the Export dialog.
 
-        # Generation
-        - Costs real money and is not undoable. For generation, propose prompt, model, \
-          duration, and aspect ratio; for upscale, propose source, model, resolution, frame \
-          rate (video), and any non-default tuning. Wait for confirmation before submitting.
-        - Flow: images first — iterate stills until the user approves the look, then use the \
-          approved image as the video's startFrameMediaRef. Straight text-to-video only when \
-          asked or when no frame anchors the shot.
-        - For video models that report supportsDraft=true, draft=true creates a lower-cost \
-          720p approval preview from text, frames, or source video. Use it when auditioning \
-          alternatives, not when the user asked for a final render; approved drafts can be \
-          enhanced later without changing their motion. To enhance an approved draft, call \
-          generate_video with enhanceDraftMediaRef set to that draft's media ID.
-        - Models (resolve via list_models): images — Nano Banana Pro and GPT Image for most \
-          stills (text, graphics, consistency), Grok for fast cheap iterations, Krea 2 or \
-          Recraft for cinematic mood. Video — Seedance 2.0 Fast at 720p while iterating, \
-          regular Seedance 2.0 for the approved take, Kling v3 if Seedance errors, Grok \
-          Imagine only for very simple scenes, Veo rarely.
-        - Generation and url/path imports return a placeholder id and run in the background. \
-          Do not busy-poll long jobs (video/image/upscale) — fire and move on. Audio is \
-          usually fast: one or two get_media ids:[placeholder] checks are fine. Never promise \
-          to notify, resume, or keep working once generation finishes — this turn cannot \
-          re-trigger itself; tell the user the placeholder id and that they can ask you to \
-          continue when it's ready. On generationStatus 'failed', tell the user and ask \
-          before re-firing.
-        - Consistency: reuse referenceMediaRefs on images; startFrameMediaRef / \
-          endFrameMediaRef and the per-model reference*MediaRefs on video. Build base shots \
-          before derived ones; parallelize independent generations; organize related \
-          generations with a `folder` path on the call.
-        - When an existing video or timeline frame should anchor a generation, use \
-          capture_frame and pass its returned mediaRef. Never approximate that frame with \
-          generate_image.
-        - Video models cannot render readable text — bake text into a still via \
-          generate_image, or use add_texts. Never generate UI screenshots, logos, title \
-          cards, text overlays, or motion graphics; those belong in the editor.
         - import_media bridges external assets (url, path, or bytes) and makes solid-color \
-          mattes (source.matte with hex).
-        - Audio models (list_models type='audio'): TTS — the prompt is the exact words to \
-          speak; pass a supported voice, styleInstructions where offered. Music — the prompt \
-          describes style/mood/genre; lyrics with [Verse]/[Chorus] tags where supported (for \
-          Lyria 3 Pro, fold lyrics/tempo/language/vocal style into the prompt); instrumental \
-          only where supported.
-        - Upscaling (list_models type='upscale'): inspect the source's width, height, and fps \
-          with get_media. Use the model and family descriptions; call inspect_media when the \
-          source's visual condition determines the choice. Pass a flat settings object using \
-          the listed IDs and values. targetFPS='source' preserves frame rate; a higher numeric \
-          target interpolates. Omit restoration tuning unless requested or clearly needed.
-
-        # Prompt craft
-        - Images, 15–30 words: subject + setting + shot type + lighting/mood. Concrete nouns \
-          beat adjectives.
-        - Videos, 8–20 words: camera movement + subject action. With a startFrameMediaRef, \
-          don't re-describe the frame — spend the words on motion and sound. State dialogue, \
-          VO, SFX, and music explicitly; silent video is usually a bug.
+          mattes (source.matte with hex). URL imports return a placeholder id and run in the \
+          background: don't busy-poll — tell the user the placeholder id and that they can ask \
+          you to continue when get_media reports it ready. On generationStatus 'failed', tell \
+          the user before re-firing.
 
         # Skill authoring
         - When the user asks to turn this edit / timeline into a reusable skill or template, \
@@ -177,12 +125,6 @@ enum AgentInstructions {
           caption templates/skills when they match). Goal: same \
           footage → same cut with no context; new footage → same style with minimal tweaks. \
           If a create-skill-from-timeline skill is available, read it and follow it.
-
-        # Feedback
-        - When a capability is missing or broken, a result is clearly wrong, or the user is \
-          plainly hitting a limitation, call send_feedback once with a paraphrased summary — \
-          never verbatim user content. Send workflow improvements as `suggestion`. One per \
-          distinct issue; mention it to the user briefly.
 
         # Communication
         - One or two sentences; lead with the outcome. The user watches the timeline change — \

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct HomeView: View {
     @Bindable private var onboarding = OnboardingStore.shared
-    @Bindable private var changelog = ChangelogStore.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -22,14 +21,9 @@ struct HomeView: View {
         .background(.ultraThinMaterial)
         .focusEffectDisabled()
         .task { await VisualModelLoader.shared.prepare() }
-        .onAppear { changelog.checkForWhatsNew() }
         .overlay {
             if !onboarding.isComplete {
                 OnboardingOverlay(onboarding: onboarding)
-            } else if let entry = changelog.pending {
-                UpdateOverlay(entry: entry, changelogURL: changelog.changelogURL) {
-                    withAnimation { changelog.dismiss() }
-                }
             }
         }
         .animation(.easeInOut(duration: AppTheme.Anim.transition), value: onboarding.isComplete)
@@ -38,7 +32,6 @@ struct HomeView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            SampleProjectsStrip()
             MyProjectsSection()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -58,44 +51,18 @@ struct HomeView: View {
 }
 
 private struct WelcomeTitle: View {
-    @Bindable private var account = AccountService.shared
-
     var body: some View {
-        Text(title)
+        Text(L10n.string("Welcome to Palmier Pro"))
             .font(.system(size: AppTheme.FontSize.title2, weight: .light))
             .tracking(AppTheme.Tracking.tight)
             .foregroundStyle(AppTheme.Text.primaryColor)
     }
-
-    private var title: String {
-        if let first = account.account?.user.firstName {
-            return L10n.string("Welcome to Palmier Pro, \(first)")
-        }
-        return L10n.string("Welcome to Palmier Pro")
-    }
 }
 
 private struct HomeSidebar: View {
-    @Bindable private var account = AccountService.shared
-    @Bindable private var updater = Updater.shared
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if account.isSignedIn {
-                IdentityStrip()
-            }
-
             VStack(alignment: .leading, spacing: 2) {
-                if !account.isSignedIn && !account.isMisconfigured {
-                    SidebarRowButton(
-                        label: account.isSigningIn
-                            ? L10n.string("Opening Google…")
-                            : L10n.string("Sign in with Google"),
-                        systemImage: "person.crop.circle",
-                        action: { Task { await account.signInWithGoogle() } }
-                    )
-                    .disabled(account.isSigningIn)
-                }
                 SidebarRowButton(
                     label: L10n.string("New Project"),
                     systemImage: "plus",
@@ -111,11 +78,6 @@ private struct HomeSidebar: View {
             .padding(.vertical, AppTheme.Spacing.md)
 
             Spacer(minLength: 0)
-
-            UpdateSidebarCard()
-                .padding(.horizontal, AppTheme.Spacing.smMd)
-                .padding(.bottom, AppTheme.Spacing.sm)
-                .animation(.easeInOut(duration: AppTheme.Anim.transition), value: updater.updateAvailable)
 
             SidebarRowButton(
                 label: L10n.string("Settings"),

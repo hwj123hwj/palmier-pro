@@ -121,7 +121,7 @@ enum TimelineMarkerRenderer {
         for marker: TimelineMarker, geometry: TimelineGeometry, lane: Lane
     ) -> [NSRect] {
         let flag = flagRect(for: marker, geometry: geometry, lane: lane)
-        var rects = marker.isRange
+        let rects = marker.isRange
             ? [
                 NSRect(x: flag.minX, y: flag.minY, width: flag.width / 2, height: flag.height),
                 NSRect(x: geometry.xForFrame(marker.endFrame), y: flag.minY,

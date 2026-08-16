@@ -12,20 +12,6 @@ extension ClipType {
     }
 }
 
-extension AudioModelConfig.Category {
-    @MainActor
-    var localizedLabel: String {
-        switch self {
-        case .general: L10n.string("General")
-        case .tts: L10n.string("Speech")
-        case .music: L10n.string("Music")
-        case .sfx: L10n.string("Sound Effects")
-        case .cleanup: L10n.string("Voice Cleanup")
-        case .dubbing: L10n.string("Dubbing")
-        }
-    }
-}
-
 extension CropAspectLock {
     @MainActor
     var localizedLabel: String {

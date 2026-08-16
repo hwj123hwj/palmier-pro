@@ -137,6 +137,3 @@ final class HelpWindowController: NSWindowController {
     }
 }
 
-#Preview {
-    HelpView()
-}

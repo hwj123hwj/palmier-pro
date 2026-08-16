@@ -957,8 +957,7 @@ final class TimelineView: NSView, NSPopoverDelegate {
     private func syncGeneratingClipOverlays(geometry geo: TimelineGeometry) {
         var active: [String: NSRect] = [:]
         for (ti, track) in editor.timeline.tracks.enumerated() {
-            for clip in track.clips
-                where editor.pendingReplacements.contains(clip.id) || editor.isClipMediaGenerating(clip) {
+            for clip in track.clips where editor.isClipMediaGenerating(clip) {
                 active[clip.id] = clipDisplayRects[clip.id] ?? geo.clipRect(for: clip, trackIndex: ti)
             }
         }
@@ -1485,11 +1484,6 @@ final class TimelineView: NSView, NSPopoverDelegate {
         addToChatItem.target = self
         addToChatItem.representedObject = targetClipIds
         aiItems.append(addToChatItem)
-        if let aiEditSubmenu = aiEditSubmenu(for: clip.id) {
-            let aiEditItem = NSMenuItem(title: L10n.string("AI Edit"), action: nil, keyEquivalent: "")
-            aiEditItem.submenu = aiEditSubmenu
-            aiItems.append(aiEditItem)
-        }
 
         // Nest
         var nestItems: [NSMenuItem] = []
@@ -1592,16 +1586,6 @@ final class TimelineView: NSView, NSPopoverDelegate {
         if let gap = inputController.hitTestGap(at: point, trackIndex: trackIndex, geometry: geometry) {
             menu.autoenablesItems = false
             let gapInfo = ["trackIndex": gap.trackIndex, "start": gap.range.start, "end": gap.range.end] as [String: Any]
-
-            if gap.range.start > 0, editor.timeline.tracks[gap.trackIndex].type == .video {
-                let availability = editor.aiTransitionAvailability(for: gap)
-                let item = NSMenuItem(title: L10n.string("Create AI Transition"), action: #selector(performCreateAITransition(_:)), keyEquivalent: "")
-                item.target = self
-                item.isEnabled = availability.model != nil
-                item.toolTip = availability.refusal
-                item.representedObject = gapInfo
-                menu.addItem(item)
-            }
 
             let refusal = editor.rippleDeleteGapRefusal(gap)
             let deleteItem = NSMenuItem(title: L10n.string("Ripple Delete Gap"), action: #selector(performRippleDeleteGap(_:)), keyEquivalent: "")
