@@ -43,19 +43,21 @@
 
 ### 本机构建环境适配（无 Xcode，仅 Command Line Tools）
 
-这台机器没有 Xcode（只有 CLT 26.4 + Swift 6.3.1），为此做了四处适配：
+这台机器没有 Xcode（只有 CLT 26.4 + Swift 6.3.1），且公司环境不允许注册 Apple ID。为此做了如下适配：
 
-1. **Metal 内核**：CLT 没有 `metal` 编译器。`MetalCIKernelPlugin` 现在在工具链可用时产出编译后的 metallib 字节，否则原样拷贝内核源码，统一命名为 `.cikernel`；`CIKernelLoader` 按 `MTLB` 魔数分派——metallib 直接加载，源码用 `CIKernel.kernels(withMetalString:)` 首次使用时编译。装了 Xcode 后自动回到编译路径。
+1. **Metal 内核**：CLT 没有 `metal` 编译器。`MetalCIKernelPlugin` 在工具链可用时产出编译后的 metallib 字节，否则原样拷贝内核源码，统一命名为 `.cikernel`；`CIKernelLoader` 按 `MTLB` 魔数分派。内核源码已改为 `[[stitchable]]`（去掉 `extern "C"`）——这是运行时编译（`CIKernel.kernels(withMetalString:)`）的硬性要求，编译期 `-fcikernel` 路径同样兼容。装了 Xcode 后自动回到编译路径。
 2. **lottie-ios 锁定 4.5.2**：4.6.x 在 macOS 26 SDK 下使用 `@Entry` 宏，其插件（SwiftUIMacros）只随 Xcode 发布，CLT 编不过。4.5.2 用经典 EnvironmentKey 模式，本项目用到的 Lottie API 在两个版本都有。
-3. **`Testing` 模块**：CLT 自带的 swift-testing framework 不在默认搜索路径，测试 target 加了 `-F /Library/Developer/CommandLineTools/Library/Developer/Frameworks`。
+3. **`Testing` 模块**：CLT 自带的 swift-testing framework 不在默认搜索路径，测试 target 加了 `-F` 和 rpath 指向 CLT 的框架目录。
 4. **`#Preview` 宏**：插件同样只随 Xcode 发布，四个文件里的 `#Preview` 块已删除（纯开发预览，无运行时作用）。
+5. **测试执行经 swiftly 解锁**：CLT 自带的 swift-testing 运行时会静默发现 0 个测试（不可用）。已安装 [swiftly](https://github.com/swiftlang/swiftly)（Apple 官方开源工具链管理器，`installer -target CurrentUserHomeDirectory` 装到用户目录，无需 Apple ID/sudo），工具链 Swift 6.3.3 位于 `~/.swiftly`，`.zshrc` 已挂载其 env。仓库 `.swift-version` 固定为 `Swift 6.3.3`。
 
 ### 验证标准
 
 - `swift build` 通过 ✅
 - `swift build --traits BundledSpeech` 通过 ✅
-- `swift test`：测试 target **编译**通过 ✅；**执行**在本机不可行 ❌ —— CLT 的 swift-testing 运行时（swiftpm-testing-helper）静默枚举出 0 个测试，且 CLT 无 `xctest` 工具。安装 Xcode 后 `swift test` 即可完整执行（届时 Metal 预编译、`#Preview`、lottie 4.6 也都恢复可用，现有适配不会冲突）。
-- 手动 UI 清单：见执行报告。
+- `swift test` 全量通过 ✅（1524 tests / 238 suites，swiftly 工具链执行）
+- 三个依赖系统语言的测试已改为 locale 无关（通知文案、本地化包、菜单快捷键）
+- 手动 UI 清单：见执行报告
 
 ## Phase 2 — 生成能力直连重建（另行启动）
 
