@@ -71,6 +71,18 @@ scripts/generate-video-browser.sh "提示词（建议以 Generate a video: 开�
 5. `video.src` 是 `contribution.usercontent.google.com` 签名下载链——**必须页面内
    fetch**（要 Google cookie），base64 落盘，校验 MP4 `ftyp` 魔数
 
+## 音乐生成（Gemini / Lyria，Bilal 账号）
+
+```bash
+scripts/generate-music-browser.sh "Generate music: 描述风格/情绪/时长" [输出.mp4]
+```
+
+与视频管线同构（Gemini 把音频渲染在 `<video>` 元素里，AAC-in-mp4）。注意时长由
+网页模型自定（实测固定 ~30 秒，提示词写 15s 也是 30s）。下载一处不同：音频 URL
+偶尔很慢，会超过单次 `js()` 求值超时——脚本用"页面内启动 fetch、结果存
+`window.__palmierDL`、2 秒轮询取回"的模式绕开（generate-music-browser.sh 里的
+实现）。播放器上的 "Download track" 按钮对 CDP 点击无响应，直接 fetch 元素 src。
+
 ## ego-lite 多账号 = 多 Chromium profile
 
 - `ego.listProfiles()` 列出：`Default`（威健）、`huang`（weijianzuibang）、`Bilal`
