@@ -160,7 +160,7 @@ final class ToolExecutor {
     private static func canReadInactiveProject(_ tool: ToolName) -> Bool {
         switch tool {
         case .getTimeline, .inspectTimeline, .getMedia, .inspectMedia, .searchMedia,
-             .getMulticam, .getTranscript, .detectBeats, .inspectColor:
+             .getMulticam, .getTranscript, .detectBeats, .inspectColor, .listModels:
             true
         default:
             false
@@ -207,6 +207,9 @@ final class ToolExecutor {
         case .exportProject: return try await exportProject(editor, args)
         case .manageExports: return try manageExports(editor, args)
         case .importMedia:   return try await importMedia(editor, args)
+        case .listModels:    return try listModels(args)
+        case .generateVideo: return try generateVideo(editor, args)
+        case .generateImage: return try generateImage(editor, args)
         case .organizeMedia: return try organizeMedia(editor, args)
         case .setProjectSettings: return try setProjectSettings(editor, args)
         case .createTimeline:     return try createTimeline(editor, args)

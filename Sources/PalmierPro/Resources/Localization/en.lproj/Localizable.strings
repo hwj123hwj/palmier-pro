@@ -20,6 +20,7 @@
 "%lld subtitle files are ready in Palmier Pro." = "%lld subtitle files are ready in Palmier Pro.";
 "%lld text clips are ready in Palmier Pro." = "%lld text clips are ready in Palmier Pro.";
 "%lld videos are ready in Palmier Pro." = "%lld videos are ready in Palmier Pro.";
+"%llds" = "%llds";
 "(image payload)" = "(image payload)";
 "1 clip" = "1 clip";
 "1 item" = "1 item";
@@ -311,7 +312,10 @@
 "Gamma" = "Gamma";
 "General" = "General";
 "Generate" = "Generate";
+"Generate video and images with your own fal.ai key. Stored in the macOS Keychain." = "Generate video and images with your own fal.ai key. Stored in the macOS Keychain.";
+"Generating %@." = "Generating %@.";
 "Generating…" = "Generating…";
+"Generation" = "Generation";
 "Generation Failed" = "Generation Failed";
 "Generation Input" = "Generation Input";
 "Generation complete" = "Generation complete";
@@ -319,6 +323,7 @@
 "Get OpenAI API key" = "Get OpenAI API key";
 "Get Started" = "Get Started";
 "Get a notification when a generation finishes." = "Get a notification when a generation finishes.";
+"Get fal.ai key" = "Get fal.ai key";
 "Getting the search model ready." = "Getting the search model ready.";
 "GitHub" = "GitHub";
 "Glow" = "Glow";
@@ -387,6 +392,7 @@
 "Keeps this much audio before and after detected speech." = "Keeps this much audio before and after detected speech.";
 "Keyboard Shortcuts" = "Keyboard Shortcuts";
 "Keyframes" = "Keyframes";
+"Kind" = "Kind";
 "LUTs" = "LUTs";
 "Labels" = "Labels";
 "Language" = "Language";
@@ -830,6 +836,7 @@
 "drift correction skipped — it would overwrite an adjacent clip" = "drift correction skipped — it would overwrite an adjacent clip";
 "drift-corrected" = "drift-corrected";
 "error" = "error";
+"fal.ai API Key" = "fal.ai API Key";
 "group moved right to fit" = "group moved right to fit";
 "iMovie" = "iMovie";
 "lowercase" = "lowercase";

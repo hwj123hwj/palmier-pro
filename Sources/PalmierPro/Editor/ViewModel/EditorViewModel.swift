@@ -197,6 +197,7 @@ final class EditorViewModel {
         manifest: { MediaManifest() }, projectURL: { nil }
     )
 
+    let generationService = GenerationService()
     let agentService = AgentService()
 
     var agentPanelVisible: Bool = {

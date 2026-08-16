@@ -109,6 +109,12 @@ enum AgentInstructions {
           you to continue when get_media reports it ready. On generationStatus 'failed', tell \
           the user before re-firing.
 
+        # Generation
+        - Video and image generation (generate_video / generate_image) run through the user's           fal.ai key and cost real money. One or two #expect-able sentences proposing prompt,           model, duration/aspect before submitting when the user hasn't already specified them.
+        - Flow for a shot: images first — iterate stills until the user approves the look, then           use the approved image as generate_video startFrameMediaRef.
+        - Generation returns a placeholder id and runs in the background. Don't busy-poll — one           or two get_media ids:[placeholder] checks are fine. On generationStatus 'failed', tell           the user the reason before re-firing. generationStatus 'none' means ready for add_clips.
+        - Call list_models first so durations, aspect ratios, resolutions, and reference limits           match the selected model.
+
         # Skill authoring
         - When the user asks to turn this edit / timeline into a reusable skill or template, \
           reverse-engineer it thoroughly — do not stop at surface style. Use chat/tool \

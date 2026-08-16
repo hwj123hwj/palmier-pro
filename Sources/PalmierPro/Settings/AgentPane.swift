@@ -12,6 +12,26 @@ struct AgentPane: View {
             SettingsSection(title: L10n.string("Integrations")) {
                 mcpSection
             }
+            SettingsSection(title: L10n.string("Generation")) {
+                generationKeySection
+            }
+        }
+    }
+
+    private var generationKeySection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+            Text(L10n.string("Generate video and images with your own fal.ai key. Stored in the macOS Keychain."))
+                .font(.system(size: AppTheme.FontSize.sm))
+                .foregroundStyle(AppTheme.Text.tertiaryColor)
+                .fixedSize(horizontal: false, vertical: true)
+            APIKeySettingRow(
+                title: L10n.string("fal.ai API Key"),
+                getKeyTitle: L10n.string("Get fal.ai key"),
+                keyPlaceholder: "key_id:key_secret",
+                consoleURL: URL(string: "https://fal.ai/dashboard/keys")!,
+                loadKey: { GenerationKeyStore.storedKey },
+                storeKey: { GenerationKeyStore.save($0) }
+            )
         }
     }
 
@@ -21,8 +41,22 @@ struct AgentPane: View {
                 .font(.system(size: AppTheme.FontSize.sm))
                 .foregroundStyle(AppTheme.Text.tertiaryColor)
                 .fixedSize(horizontal: false, vertical: true)
-            APIKeySettingRow(provider: .anthropic)
-            APIKeySettingRow(provider: .openAI)
+            APIKeySettingRow(
+                title: L10n.string("Anthropic API Key"),
+                getKeyTitle: L10n.string("Get Anthropic API key"),
+                keyPlaceholder: "sk-ant-…",
+                consoleURL: URL(string: "https://console.anthropic.com/settings/keys")!,
+                loadKey: { await AgentProvider.anthropic.loadAPIKey() },
+                storeKey: { key in Task { await AgentProvider.anthropic.setAPIKey(key) } }
+            )
+            APIKeySettingRow(
+                title: L10n.string("OpenAI API Key"),
+                getKeyTitle: L10n.string("Get OpenAI API key"),
+                keyPlaceholder: "sk-…",
+                consoleURL: URL(string: "https://platform.openai.com/api-keys")!,
+                loadKey: { await AgentProvider.openAI.loadAPIKey() },
+                storeKey: { key in Task { await AgentProvider.openAI.setAPIKey(key) } }
+            )
         }
     }
 
@@ -108,7 +142,12 @@ struct AgentPane: View {
 }
 
 private struct APIKeySettingRow: View {
-    let provider: AgentProvider
+    let title: String
+    let getKeyTitle: String
+    let keyPlaceholder: String
+    let consoleURL: URL
+    let loadKey: @Sendable () async -> String
+    let storeKey: (String?) -> Void
 
     @State private var hasKey = false
     @State private var maskedKey = ""
@@ -128,13 +167,13 @@ private struct APIKeySettingRow: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.sm) {
-            Text(provider.apiKeyPresentation.title)
+            Text(title)
                 .font(.system(size: AppTheme.FontSize.md, weight: AppTheme.FontWeight.medium))
                 .foregroundStyle(AppTheme.Text.primaryColor)
 
             Button(action: openConsole) {
                 HStack(spacing: AppTheme.Spacing.xxs) {
-                    Text(provider.apiKeyPresentation.getKeyTitle)
+                    Text(getKeyTitle)
                     Image(systemName: "arrow.up.right")
                         .font(.system(
                             size: AppTheme.FontSize.xs,
@@ -194,19 +233,15 @@ private struct APIKeySettingRow: View {
     }
 
     private var placeholder: String {
-        hasKey ? maskedKey : provider.apiKeyPresentation.placeholder
+        hasKey ? maskedKey : keyPlaceholder
     }
 
     private func openConsole() {
-        NSWorkspace.shared.open(
-            provider.apiKeyPresentation.consoleURL, configuration: .init(), completionHandler: nil
-        )
+        NSWorkspace.shared.open(consoleURL, configuration: .init(), completionHandler: nil)
     }
 
     private func refresh() {
-        Task {
-            applyKey(await provider.loadAPIKey())
-        }
+        Task { applyKey(await loadKey()) }
     }
 
     private func save() {
@@ -214,20 +249,14 @@ private struct APIKeySettingRow: View {
         guard !key.isEmpty else { return }
         draft = ""
         isFocused = false
-        let provider = provider
-        Task {
-            await provider.setAPIKey(key)
-            applyKey(key)
-        }
+        storeKey(key)
+        applyKey(key)
     }
 
     private func remove() {
         draft = ""
-        let provider = provider
-        Task {
-            await provider.setAPIKey(nil)
-            applyKey("")
-        }
+        storeKey(nil)
+        applyKey("")
     }
 
     private func applyKey(_ key: String) {

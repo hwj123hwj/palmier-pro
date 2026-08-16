@@ -658,6 +658,7 @@ class VideoProject: NSDocument {
 
         editorViewModel.updateManifestMetadata(for: manifestUpdates)
         editorViewModel.missingMediaRefs = missingRefs
+        editorViewModel.generationService.markStaleJobsFailed(editor: editorViewModel)
         Log.project.notice(
             "restore ok restored=\(restored) missing=\(missing)"
         )

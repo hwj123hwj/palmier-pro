@@ -288,7 +288,12 @@ struct MediaTab: View {
         .padding(.bottom, AppTheme.Spacing.sm)
         .background(AppTheme.Background.surfaceColor)
         .animation(.easeInOut(duration: AppTheme.Anim.transition), value: editor.isMediaPanelSearchExpanded)
+        .sheet(isPresented: $showGenerateSheet) {
+            GenerateSheet()
+        }
     }
+
+    @State private var showGenerateSheet = false
 
     private var actionsRow: some View {
         return HStack(spacing: AppTheme.Spacing.xs) {
@@ -299,6 +304,9 @@ struct MediaTab: View {
             } else {
                 toolbarButton(title: L10n.string("Import"), action: importMedia)
                     .tourAnchor(.importButton)
+                if GenerationKeyStore.isConfigured {
+                    toolbarButton(title: L10n.string("Generate"), action: { showGenerateSheet = true })
+                }
                 overflowMenu
                 Spacer(minLength: AppTheme.Spacing.zero)
             }
