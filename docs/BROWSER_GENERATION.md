@@ -48,6 +48,32 @@ Palmier Pro 侧可加 `BrowserChatGPTProvider` adapter：`GenerationProvider` �
 实现之一，`submit/poll/result` 通过 `Process` 调 `ego-browser nodejs` 驱动网页，
 零 key、走订阅。与 fal / 直连厂商在目录里并存可选。
 
-## 视频（待补）
+## 视频生成（Gemini / Veo，走 Bilal 账号）
 
-视频同样可以走网页生成，具体站点与流程待确认后补记于此。
+```bash
+scripts/generate-video-browser.sh "提示词（建议以 Generate a video: 开头）" [输出.mp4] [profile 名，默认 Bilal]
+```
+
+链路（2026-08-16 实测，单条约 1 分钟生成 + 下载）：
+
+1. 任务空间绑定 **Bilal profile**（见下节），打开 `gemini.google.com/app`
+2. `fillInput('rich-textarea .ql-editor', 提示词)`——Gemini 的 composer 是 Quill
+   rich-textarea，选择器 `rich-textarea .ql-editor`
+3. 点击 `button.send-button`（或 `button[aria-label*="Send"]`）
+4. 每 10 秒轮询 `main video` 元素（最长 6 分钟），出现即生成完成
+5. `video.src` 是 `contribution.usercontent.google.com` 签名下载链——**必须页面内
+   fetch**（要 Google cookie），base64 落盘，校验 MP4 `ftyp` 魔数
+
+## ego-lite 多账号 = 多 Chromium profile
+
+- `ego.listProfiles()` 列出：`Default`（威健）、`huang`（weijianzuibang）、`Bilal`
+- **任务空间在创建时绑定 profile**：`ego.createTaskSpace(名字, profileId)`；已存在的
+  空间不能换 profile。日常复用 `useOrCreateTaskSpace(id)` 即可
+- 空间里的标签页跑在绑定 profile 的登录态下——图片脚本用默认空间（ChatGPT，主账号），
+  视频脚本用 Bilal 空间（Gemini），互不干扰
+- 同一 Google profile 内多账号也可用 `?authuser=N` 切换，但 Bilal 是独立 profile，
+  不走这条路
+
+## 风险（视频同图片）
+
+低频个人用没事；高频有 Google 风控风险；Gemini 改版需更新选择器（都在脚本里）。
