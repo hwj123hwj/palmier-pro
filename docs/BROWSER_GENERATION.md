@@ -34,6 +34,13 @@ Palmier Pro 媒体面板。
 
 另外每个 heredoc 是独立 Node 进程，开头必须 `useOrCreateTaskSpace(...)` 先选空间。
 
+## 生命周期：用完即关，不积窗口
+
+两个脚本成功后自动 `completeTaskSpace(keep: false)`——空间及其标签页/窗口随即关闭，
+不会越积越多。登录态存在 Chromium profile 里而非任务空间，关掉无损失，下次运行只多
+几秒页面加载。若某次运行中途失败留下空间，下次运行会复用或重建；手动清理：
+`ego-browser nodejs` 里 `ego.deleteSpaces({ ids: [...] })`。
+
 ## 边界与风险
 
 - **频率**：网页自动化属 OpenAI ToS 灰区，个人低频没事，高频轰炸有账号风控风险

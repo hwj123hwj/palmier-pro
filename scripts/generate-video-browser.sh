@@ -81,5 +81,6 @@ if (buf.subarray(4, 8).toString() !== 'ftyp') {
 }
 fs.writeFileSync(outPath, buf)
 cliLog('saved ' + outPath + ' (' + buf.length + ' bytes)')
+await completeTaskSpace(task.id, { keep: false })
 EOF
 echo "==> $OUT"

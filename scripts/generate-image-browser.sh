@@ -61,5 +61,6 @@ if (buf.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
 }
 fs.writeFileSync(outPath, buf)
 cliLog('saved ' + outPath + ' (' + buf.length + ' bytes)')
+await completeTaskSpace(task.id, { keep: false })
 EOF
 echo "==> $OUT"
