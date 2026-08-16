@@ -14,6 +14,13 @@ struct FrameCaptureReceipt {
     let destinationFolderWasRemoved: Bool
 }
 
+extension FrameCaptureSource {
+    /// The playhead parks at totalFrames when playback ends; capture then means the last real frame.
+    static func timelineCapture(playhead: Int, totalFrames: Int) -> FrameCaptureSource {
+        .timeline(frame: min(playhead, max(0, totalFrames - 1)))
+    }
+}
+
 extension EditorViewModel {
     enum FrameCaptureError: LocalizedError {
         case noProject
@@ -154,7 +161,7 @@ extension EditorViewModel {
         let source: FrameCaptureSource
         switch activePreviewTab {
         case .timeline:
-            source = .timeline(frame: currentFrame)
+            source = .timelineCapture(playhead: currentFrame, totalFrames: timeline.totalFrames)
         case .mediaAsset(let id, _, let type):
             guard type == .video else { return }
             source = .media(
