@@ -683,10 +683,13 @@ struct MediaPanelInteractionTests {
     @Test func mainMenuUsesStandardNewFolderShortcut() throws {
         _ = NSApplication.shared
         let mainMenu = MainMenuBuilder.buildMenu()
-        let fileMenu = try #require(mainMenu.items.compactMap(\.submenu).first { $0.title == "File" })
+        let fileMenu = try #require(
+            mainMenu.items.compactMap(\.submenu)
+                .first { $0.items.contains { $0.action == #selector(EditorActions.newMediaFolder(_:)) } }
+        )
         let item = try #require(fileMenu.items.first { $0.action == #selector(EditorActions.newMediaFolder(_:)) })
 
-        #expect(item.title == "New Folder")
+        #expect(item.title == L10n.string("New Folder"))
         #expect(item.keyEquivalent == "n")
         #expect(item.keyEquivalentModifierMask == [.command, .shift])
     }
