@@ -131,12 +131,6 @@ struct MediaTab: View {
             .layoutPriority(1)
             .onChange(of: searchQuery) { _, _ in scheduleMomentSearch() }
         }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.height
-        } action: { newValue in
-            mediaPanelHeight = newValue
-        }
-        }
         .onExitCommand { if editor.pendingSwapClipId != nil { editor.cancelMediaSwap() } }
         .onChange(of: editor.folders.map(\.id)) { _, _ in pruneStaleFolderState() }
         .onChange(of: editor.mediaPanelRevealAssetId) { _, target in
@@ -297,7 +291,7 @@ struct MediaTab: View {
     }
 
     private var actionsRow: some View {
-        HStack(spacing: AppTheme.Spacing.xs) {
+        return HStack(spacing: AppTheme.Spacing.xs) {
             if editor.isMediaPanelSearchExpanded {
                 searchField
                     .layoutPriority(1)
@@ -637,6 +631,11 @@ struct MediaTab: View {
         .fixedSize(horizontal: true, vertical: false)
         .focusable(false)
         .help(title)
+    }
+
+    private var mediaAreaCollapsed: Bool {
+        !editor.mediaPanelVisible
+            || (editor.maximizedPanel != nil && editor.maximizedPanel != .media)
     }
 
     private var overflowMenu: some View {
