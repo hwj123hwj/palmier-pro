@@ -12,7 +12,7 @@
 
 ## Phase 1 — 剥离商业层，得到纯本地编辑器
 
-基线：当前 HEAD（上游 d2add80）。Phase 2 需要恢复供应商无关代码时，用 `git show HEAD:<path>` 取回。
+基线：上游 d2add80。
 
 ### 删除
 
