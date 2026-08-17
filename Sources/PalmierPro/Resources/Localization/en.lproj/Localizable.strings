@@ -464,6 +464,7 @@
 "Move to Folder" = "Move to Folder";
 "Multicam" = "Multicam";
 "Multiply" = "Multiply";
+"Music" = "Music";
 "My Projects" = "My Projects";
 "Name" = "Name";
 "Nest settings discarded. Undo to restore." = "Nest settings discarded. Undo to restore.";
@@ -570,6 +571,7 @@
 "Redetect Beats" = "Redetect Beats";
 "Redo" = "Redo";
 "Redo (⇧⌘Z)" = "Redo (⇧⌘Z)";
+"References" = "References";
 "Refresh" = "Refresh";
 "Refresh Community Skills" = "Refresh Community Skills";
 "Refresh to check for available skills." = "Refresh to check for available skills.";
@@ -691,6 +693,7 @@
 "Split at Playhead (⌘K)" = "Split at Playhead (⌘K)";
 "Spoken" = "Spoken";
 "Square (1:1)" = "Square (1:1)";
+"Start Frame" = "Start Frame";
 "Start creating" = "Start creating";
 "Start creating, or explore these to get the most out of Palmier Pro." = "Start creating, or explore these to get the most out of Palmier Pro.";
 "Starts %@s into the group's clock; matched the master with %@%% confidence." = "Starts %@s into the group's clock; matched the master with %@%% confidence.";

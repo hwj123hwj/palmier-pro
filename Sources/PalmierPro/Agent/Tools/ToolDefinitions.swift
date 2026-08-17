@@ -66,6 +66,7 @@ enum ToolName: String, CaseIterable, Sendable {
     case listModels = "list_models"
     case generateVideo = "generate_video"
     case generateImage = "generate_image"
+    case generateAudio = "generate_audio"
 
     // Meta
     case readSkill = "read_skill"
@@ -1047,23 +1048,23 @@ enum ToolDefinitions {
         ),
         AgentTool(
             name: .listModels,
-            description: "Lists the generation models available through the configured fal.ai API key, with each model's supported aspect ratios, durations (video), resolutions (image), whether it requires a source image, and reference image limits. Call before generate_video or generate_image so the parameters you pass actually fit the model.",
+            description: "Lists the available generation models with each model's type (video | image | audio), channel ('fal' bills the configured fal.ai API key; 'browser*' channels run in the user's logged-in ChatGPT/Gemini web session and cost no API money), supported aspect ratios, durations (video), resolutions (image), whether it takes a start-frame image, and reference image limits. Call before generate_video / generate_image / generate_audio so the parameters you pass actually fit the model.",
             inputSchema: objectSchema(
                 properties: [
-                    "type": ["type": "string", "enum": ["video", "image"], "description": "Optional. Filter by type. Omit to list all models."],
+                    "type": ["type": "string", "enum": ["video", "image", "audio"], "description": "Optional. Filter by type. Omit to list all models."],
                 ]
             )
         ),
         AgentTool(
             name: .generateVideo,
-            description: "Starts an async AI video generation. Returns a placeholder asset ID immediately; generation runs in the background and the asset becomes usable in add_clips once get_media reports it ready. Costs real money (billed to the configured fal.ai key) and is not undoable.",
+            description: "Starts an async AI video generation. Returns a placeholder asset ID immediately; generation runs in the background and the asset becomes usable in add_clips once get_media reports it ready. fal channel models bill real money to the configured fal.ai key; browser channel models consume the user's web subscription quota and cannot follow aspectRatio/duration parameters.",
             inputSchema: objectSchema(
                 properties: [
                     "prompt": ["type": "string", "description": "Motion and scene description. 8-20 words: camera movement + subject action. State dialogue/SFX/music explicitly; silent video is usually a bug."],
                     "model": ["type": "string", "description": "Model ID from list_models (type='video'). Defaults to the first video model."],
-                    "duration": ["type": "integer", "description": "Duration in seconds. Valid values come from list_models (e.g. 5 or 10)."],
-                    "aspectRatio": ["type": "string", "description": "e.g. '16:9', '9:16', '1:1'. Valid values come from list_models."],
-                    "startFrameMediaRef": ["type": "string", "description": "Optional image asset ID used as the first frame (image-to-video models)."],
+                    "duration": ["type": "integer", "description": "Duration in seconds. Valid values come from list_models (fal channel only)."],
+                    "aspectRatio": ["type": "string", "description": "e.g. '16:9', '9:16', '1:1'. Valid values come from list_models (fal channel only)."],
+                    "startFrameMediaRef": ["type": "string", "description": "Optional image asset ID used as the first frame. Required by image-to-video models; accepted (optional) by the browser Veo model, which uploads it into Gemini as the first frame."],
                     "name": ["type": "string", "description": "Optional display name. Defaults to the first 30 characters of the prompt."],
                     "folder": ["type": "string", "description": "Optional destination folder path, e.g. 'B-roll'. Created if missing."],
                 ],
@@ -1072,16 +1073,29 @@ enum ToolDefinitions {
         ),
         AgentTool(
             name: .generateImage,
-            description: "Starts an async AI image generation. Returns a placeholder asset ID immediately; the asset becomes usable in add_clips once get_media reports it ready. Costs real money (billed to the configured fal.ai key) and is not undoable.",
+            description: "Starts an async AI image generation. Returns a placeholder asset ID immediately; the asset becomes usable in add_clips once get_media reports it ready. fal channel models bill real money to the configured fal.ai key; browser channel models consume the user's web subscription quota and cannot follow aspectRatio/resolution parameters.",
             inputSchema: objectSchema(
                 properties: [
                     "prompt": ["type": "string", "description": "Image description. 15-30 words: subject + setting + shot type + lighting/mood; concrete nouns beat adjectives."],
                     "model": ["type": "string", "description": "Model ID from list_models (type='image'). Defaults to the first image model."],
-                    "aspectRatio": ["type": "string", "description": "e.g. '16:9', '1:1'. Valid values come from list_models."],
-                    "resolution": ["type": "string", "description": "e.g. '1K', '2K', '4K'. Valid values come from list_models."],
-                    "referenceImageMediaRefs": ["type": "array", "items": ["type": "string"], "description": "Optional image asset IDs used as references (consistency, style). Count limit per list_models."],
+                    "aspectRatio": ["type": "string", "description": "e.g. '16:9', '1:1'. Valid values come from list_models (fal channel only)."],
+                    "resolution": ["type": "string", "description": "e.g. '1K', '2K', '4K'. Valid values come from list_models (fal channel only)."],
+                    "referenceImageMediaRefs": ["type": "array", "items": ["type": "string"], "description": "Optional image asset IDs used as references (consistency, style, edits). Uploaded alongside the prompt on every channel; count limit per list_models."],
                     "name": ["type": "string", "description": "Optional display name. Defaults to the first 30 characters of the prompt."],
                     "folder": ["type": "string", "description": "Optional destination folder path, e.g. 'Stills'. Created if missing."],
+                ],
+                required: ["prompt"]
+            )
+        ),
+        AgentTool(
+            name: .generateAudio,
+            description: "Starts an async AI music generation (background music, stings, soundbeds — not speech; use transcription tools for speech). Returns a placeholder asset ID immediately; the asset becomes usable in add_clips once get_media reports it ready. The available model runs in the user's Gemini web session (no API cost) and produces a ~30-second track regardless of any requested duration.",
+            inputSchema: objectSchema(
+                properties: [
+                    "prompt": ["type": "string", "description": "Music description. Name genre, mood, tempo, and instrumentation, e.g. 'upbeat lo-fi hip hop, warm Rhodes chords, 90 BPM, no vocals'."],
+                    "model": ["type": "string", "description": "Model ID from list_models (type='audio'). Defaults to the first audio model."],
+                    "name": ["type": "string", "description": "Optional display name. Defaults to the first 30 characters of the prompt."],
+                    "folder": ["type": "string", "description": "Optional destination folder path, e.g. 'Music'. Created if missing."],
                 ],
                 required: ["prompt"]
             )

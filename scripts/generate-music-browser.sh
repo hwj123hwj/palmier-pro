@@ -10,6 +10,7 @@
 # Selectors verified against gemini.google.com as of 2026-08-16.
 # NOTE: ego-browser does not forward environment variables to its node runtime,
 # so parameters travel through a fixed bridge file (/tmp/palmier-music-bridge.txt).
+# All values are base64 (prompts may contain newlines).
 set -euo pipefail
 
 PROMPT="${1:?usage: generate-music-browser.sh \"prompt\" [output.mp4] [profile-name]}"
@@ -22,8 +23,13 @@ fi
 OUT="${2:-$HOME/Downloads/palmier-music-$(date +%H%M%S).mp4}"
 PROFILE_NAME="${3:-Bilal}"
 
+b64() { printf '%s' "$1" | base64 | tr -d '\n'; printf '\n'; }
 BRIDGE=/tmp/palmier-music-bridge.txt
-printf '%s\n%s\n%s\n' "$EFFECTIVE_PROMPT" "$OUT" "$PROFILE_NAME" > "$BRIDGE"
+{
+  b64 "$EFFECTIVE_PROMPT"
+  b64 "$OUT"
+  b64 "$PROFILE_NAME"
+} > "$BRIDGE"
 trap 'rm -f "$BRIDGE"' EXIT
 
 
@@ -41,7 +47,9 @@ fi
 
 "$EGO_BIN" nodejs <<'EOF'
 const fs = await import('fs')
-const [promptText, outPath, profileName] = fs.readFileSync('/tmp/palmier-music-bridge.txt', 'utf8').split('\n')
+const dec = s => Buffer.from(s, 'base64').toString('utf8')
+const [promptText, outPath, profileName] =
+  fs.readFileSync('/tmp/palmier-music-bridge.txt', 'utf8').split('\n').filter(l => l.length > 0).map(dec)
 
 // Task spaces bind a browser profile at creation; reuse ours, or create it
 // on the account profile that carries the video quota.

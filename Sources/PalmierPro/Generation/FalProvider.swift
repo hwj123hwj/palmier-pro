@@ -105,6 +105,8 @@ struct FalProvider: Sendable {
             if referenceImageDataURIs.count > 1 {
                 input["image_urls"] = Array(referenceImageDataURIs.dropFirst())
             }
+        case .audio:
+            break
         }
         return input
     }

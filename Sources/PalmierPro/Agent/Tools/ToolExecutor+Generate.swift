@@ -1,7 +1,8 @@
 import Foundation
 
-// list_models, generate_video, generate_image — video/image generation through the
-// configured fal.ai key. Jobs run in the background on placeholder assets.
+// list_models, generate_video, generate_image, generate_audio — generation jobs
+// that run in the background on placeholder assets (fal.ai API or browser web
+// sessions, per model channel).
 extension ToolExecutor {
 
     func listModels(_ args: [String: Any]) throws -> ToolResult {
@@ -77,15 +78,37 @@ extension ToolExecutor {
         return try submitGeneration(request, editor: editor)
     }
 
+    func generateAudio(_ editor: EditorViewModel, _ args: [String: Any]) throws -> ToolResult {
+        guard let model = try resolveModel(args, type: .audio, path: "generate_audio") else {
+            throw ToolError("generate_audio: no audio model requested and none is available.")
+        }
+        let prompt = try args.requireString("prompt")
+        let request = GenerationService.Request(
+            model: model,
+            prompt: prompt,
+            aspectRatio: "",
+            durationSeconds: nil,
+            resolution: nil,
+            sourceImageAssetId: nil,
+            referenceImageAssetIds: [],
+            name: args.string("name"),
+            folderId: try folderId(forFolderArg: args.string("folder"), editor: editor, path: "generate_audio.folder")
+        )
+        return try submitGeneration(request, editor: editor)
+    }
+
     private func submitGeneration(_ request: GenerationService.Request, editor: EditorViewModel) throws -> ToolResult {
         guard let asset = try? editor.generationService.submit(request, editor: editor) else {
             throw ToolError("Generation is not configured. Add a fal.ai API key in Settings → Agent.")
         }
+        let cost = request.model.channel == .fal
+            ? "bills the fal.ai key"
+            : "uses the user's web subscription quota"
         let json = Self.jsonString([
             "mediaRef": asset.id,
             "status": "generating",
             "model": request.model.displayName,
-            "note": "Generation runs in the background and costs money. Poll get_media with ids:[\"\(asset.id)\"] until generationStatus clears; the asset is then usable in add_clips. On generationStatus 'failed', report the reason to the user before retrying.",
+            "note": "Generation runs in the background and \(cost). Poll get_media with ids:[\"\(asset.id)\"] until generationStatus clears; the asset is then usable in add_clips. On generationStatus 'failed', report the reason to the user before retrying.",
         ])
         return .ok(json ?? "{}")
     }

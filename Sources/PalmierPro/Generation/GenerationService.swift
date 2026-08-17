@@ -41,13 +41,25 @@ final class GenerationService {
         try validate(request)
 
         let mediaDirectory = editor.projectURL.map { $0.appendingPathComponent(Project.mediaDirectoryName, isDirectory: true) }
-        let ext = request.model.type == .video ? "mp4" : "png"
+        let ext: String
+        switch request.model.type {
+        case .video: ext = "mp4"
+        case .audio: ext = "m4a"
+        case .image: ext = "png"
+        }
         let filename = "gen-\(UUID().uuidString.prefix(8)).\(ext)"
         let placeholderURL = (mediaDirectory ?? FileManager.default.temporaryDirectory).appendingPathComponent(filename)
 
+        let assetType: ClipType
+        switch request.model.type {
+        case .video: assetType = .video
+        case .audio: assetType = .audio
+        case .image: assetType = .image
+        }
+
         let asset = MediaAsset(
             url: placeholderURL,
-            type: request.model.type == .video ? .video : .image,
+            type: assetType,
             name: request.name ?? String(prompt.prefix(30)),
             generationInput: GenerationInput(
                 prompt: prompt,
@@ -88,6 +100,9 @@ final class GenerationService {
         guard model.channel != .fal || GenerationKeyStore.isConfigured else {
             throw GenerationError.keyMissing
         }
+        if model.requiresSourceImage, request.sourceImageAssetId == nil {
+            throw GenerationError.invalidParameter("\(model.displayName) requires a start frame image.")
+        }
         guard model.channel == .fal else { return }
         guard model.aspectRatios.contains(request.aspectRatio) else {
             throw GenerationError.invalidParameter("Aspect ratio \(request.aspectRatio) is not supported by \(model.displayName).")
@@ -110,6 +125,22 @@ final class GenerationService {
     private func run(request: Request, asset: MediaAsset, editor: EditorViewModel) async {
         defer { tasks[asset.id] = nil }
         do {
+            if request.model.channel != .fal {
+                asset.generationStatus = .generating
+                let staged = try await runBrowserScript(request: request, prompt: asset.generationInput?.prompt ?? "", editor: editor)
+                asset.generationStatus = .downloading
+                try editor.projectPackageCoordinator.beginMutation()
+                defer { editor.projectPackageCoordinator.endMutation() }
+                let committedURL = try await editor.commitStagedProjectMedia(
+                    staged,
+                    filename: asset.url.lastPathComponent,
+                    maxBytes: maxDownloadBytes,
+                    workAlreadyAdmitted: true
+                )
+                await finalize(asset: asset, committedURL: committedURL, editor: editor)
+                return
+            }
+
             let sourceURI = try await encodeImageDataURI(assetId: request.sourceImageAssetId, editor: editor)
             let referenceURIs = try await encodeImageDataURIs(assetIds: request.referenceImageAssetIds, editor: editor)
             let input = FalProvider.input(
@@ -123,22 +154,6 @@ final class GenerationService {
                     ? (sourceURI.map { [$0] } ?? [])
                     : referenceURIs
             )
-
-            if request.model.channel != .fal {
-                asset.generationStatus = .generating
-                let staged = try await runBrowserScript(request: request, prompt: asset.generationInput?.prompt ?? "")
-                asset.generationStatus = .downloading
-                try editor.projectPackageCoordinator.beginMutation()
-                defer { editor.projectPackageCoordinator.endMutation() }
-                let committedURL = try await editor.commitStagedProjectMedia(
-                    staged,
-                    filename: asset.url.lastPathComponent,
-                    maxBytes: maxDownloadBytes,
-                    workAlreadyAdmitted: true
-                )
-                await finalize(asset: asset, committedURL: committedURL, editor: editor)
-                return
-            }
 
             asset.generationStatus = .generating
             let submit = try await provider.submit(endpoint: request.model.endpoint, input: input)
@@ -191,13 +206,17 @@ final class GenerationService {
     }
 
     /// Drives the repo's ego-browser scripts and returns the produced file.
-    private func runBrowserScript(request: Request, prompt: String) async throws -> URL {
+    /// Source and reference images travel as local file paths; the scripts
+    /// upload them into the web UI's composer.
+    private func runBrowserScript(request: Request, prompt: String, editor: EditorViewModel) async throws -> URL {
         let (script, timeout): (String, Duration)
         switch request.model.channel {
         case .browserChatGPT:
-            (script, timeout) = ("generate-image-browser.sh", .seconds(240))
+            (script, timeout) = ("generate-image-browser.sh", .seconds(300))
+        case .browserGemini where request.model.type == .audio:
+            (script, timeout) = ("generate-music-browser.sh", .seconds(480))
         case .browserGemini:
-            (script, timeout) = ("generate-video-browser.sh", .seconds(480))
+            (script, timeout) = ("generate-video-browser.sh", .seconds(540))
         case .fal:
             throw GenerationError.invalidParameter("unsupported channel")
         }
@@ -210,9 +229,17 @@ final class GenerationService {
 
         let stagedURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("palmier-browser-gen-\(UUID().uuidString.prefix(8))")
+        var arguments = [prompt, stagedURL.path]
+        if let sourceId = request.sourceImageAssetId {
+            arguments += ["--source-image", try imagePath(forImageAsset: sourceId, editor: editor)]
+        }
+        for referenceId in request.referenceImageAssetIds {
+            arguments += ["--reference-image", try imagePath(forImageAsset: referenceId, editor: editor)]
+        }
+
         let process = Process()
         process.executableURL = scriptURL
-        process.arguments = [prompt, stagedURL.path]
+        process.arguments = arguments
         let errPipe = Pipe()
         process.standardError = errPipe
         process.standardOutput = FileHandle.nullDevice
@@ -247,27 +274,36 @@ final class GenerationService {
         return try await encodeImageDataURIs(assetIds: [assetId], editor: editor).first
     }
 
-    private func encodeImageDataURIs(assetIds: [String], editor: EditorViewModel) async throws -> [String] {
-        var urlsWithType: [(url: URL, isSource: Bool)] = []
-        for (index, assetId) in assetIds.enumerated() {
-            guard let asset = editor.mediaAssets.first(where: { $0.id == assetId }) else {
-                throw GenerationError.invalidParameter("Reference image \(assetId) is not in the media library.")
-            }
-            guard asset.type == .image else {
-                throw GenerationError.invalidParameter("Reference \(assetId) is not an image.")
-            }
-            urlsWithType.append((asset.url, index == 0))
+    /// Resolves an image asset the caller referenced as generation input.
+    private func requireImageAsset(_ assetId: String, editor: EditorViewModel, role: String) throws -> MediaAsset {
+        guard let asset = editor.mediaAssets.first(where: { $0.id == assetId }) else {
+            throw GenerationError.invalidParameter("\(role) \(assetId) is not in the media library.")
         }
-        let jobs = urlsWithType
+        guard asset.type == .image else {
+            throw GenerationError.invalidParameter("\(role) \(assetId) is not an image.")
+        }
+        return asset
+    }
+
+    /// Local path for browser scripts, which upload the file into the web composer.
+    private func imagePath(forImageAsset assetId: String, editor: EditorViewModel) throws -> String {
+        try requireImageAsset(assetId, editor: editor, role: "Reference image").url.path
+    }
+
+    private func encodeImageDataURIs(assetIds: [String], editor: EditorViewModel) async throws -> [String] {
+        let assets = try assetIds.enumerated().map { index, assetId in
+            try requireImageAsset(assetId, editor: editor, role: index == 0 ? "Source image" : "Reference image")
+        }
+        let jobs = assets.map(\.url)
         let encoded = await Task.detached(priority: .userInitiated) {
-            jobs.map { job in
-                ImageEncoder.encode(url: job.url).map { "data:\($0.mime);base64,\($0.data.base64EncodedString())" }
+            jobs.map { url in
+                ImageEncoder.encode(url: url).map { "data:\($0.mime);base64,\($0.data.base64EncodedString())" }
             }
         }.value
         var results: [String] = []
-        for (encoded, job) in zip(encoded, urlsWithType) {
+        for (encoded, asset) in zip(encoded, assets) {
             guard let dataURI = encoded else {
-                throw GenerationError.invalidParameter("Could not read reference image \(job.url.lastPathComponent).")
+                throw GenerationError.invalidParameter("Could not read reference image \(asset.url.lastPathComponent).")
             }
             results.append(dataURI)
         }

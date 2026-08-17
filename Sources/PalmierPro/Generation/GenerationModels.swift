@@ -4,6 +4,7 @@ import Foundation
 enum GenerationModelType: String, Codable, Sendable {
     case video
     case image
+    case audio
 }
 
 /// How a model is reached: the fal.ai API with a stored key, or a browser
@@ -28,8 +29,12 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
     let resolutions: [String]
     /// True when the model requires a source image (image-to-video).
     let requiresSourceImage: Bool
+    /// True when a start-frame image can be supplied even though it is not required.
+    let acceptsSourceImage: Bool
     /// Maximum number of reference images accepted alongside the prompt.
     let maxReferenceImages: Int
+
+    var supportsSourceImage: Bool { requiresSourceImage || acceptsSourceImage }
 
     static let all: [GenerationModel] = [
         GenerationModel(
@@ -38,7 +43,7 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
             channel: .browserGemini,
             endpoint: "",
             aspectRatios: [], durations: [], resolutions: [],
-            requiresSourceImage: false, maxReferenceImages: 0
+            requiresSourceImage: false, acceptsSourceImage: true, maxReferenceImages: 0
         ),
         GenerationModel(
             id: "browser-chatgpt-image", type: .image,
@@ -46,7 +51,15 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
             channel: .browserChatGPT,
             endpoint: "",
             aspectRatios: [], durations: [], resolutions: [],
-            requiresSourceImage: false, maxReferenceImages: 0
+            requiresSourceImage: false, acceptsSourceImage: false, maxReferenceImages: 3
+        ),
+        GenerationModel(
+            id: "browser-gemini-music", type: .audio,
+            displayName: "Gemini Music (Browser)",
+            channel: .browserGemini,
+            endpoint: "",
+            aspectRatios: [], durations: [], resolutions: [],
+            requiresSourceImage: false, acceptsSourceImage: false, maxReferenceImages: 0
         ),
         GenerationModel(
             id: "kling-v2.5-turbo-text-to-video", type: .video,
@@ -54,7 +67,8 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
             channel: .fal,
             endpoint: "fal-ai/kling-video/v2.5-turbo/pro/text-to-video",
             aspectRatios: ["16:9", "9:16", "1:1"],
-            durations: [5, 10], resolutions: [], requiresSourceImage: false, maxReferenceImages: 0
+            durations: [5, 10], resolutions: [],
+            requiresSourceImage: false, acceptsSourceImage: false, maxReferenceImages: 0
         ),
         GenerationModel(
             id: "kling-v2.5-turbo-image-to-video", type: .video,
@@ -62,7 +76,8 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
             channel: .fal,
             endpoint: "fal-ai/kling-video/v2.5-turbo/pro/image-to-video",
             aspectRatios: ["16:9", "9:16", "1:1"],
-            durations: [5, 10], resolutions: [], requiresSourceImage: true, maxReferenceImages: 0
+            durations: [5, 10], resolutions: [],
+            requiresSourceImage: true, acceptsSourceImage: true, maxReferenceImages: 0
         ),
         GenerationModel(
             id: "nano-banana-pro", type: .image,
@@ -70,7 +85,8 @@ struct GenerationModel: Identifiable, Sendable, Equatable {
             channel: .fal,
             endpoint: "fal-ai/nano-banana-pro",
             aspectRatios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
-            durations: [], resolutions: ["1K", "2K", "4K"], requiresSourceImage: false, maxReferenceImages: 14
+            durations: [], resolutions: ["1K", "2K", "4K"],
+            requiresSourceImage: false, acceptsSourceImage: false, maxReferenceImages: 14
         ),
     ]
 

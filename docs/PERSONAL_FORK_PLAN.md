@@ -59,18 +59,23 @@
 - 三个依赖系统语言的测试已改为 locale 无关（通知文案、本地化包、菜单快捷键）
 - 手动 UI 清单：见执行报告
 
-## Phase 2 — 生成能力直连重建（另行启动）
+## Phase 2 — 生成能力重建（已完成）
 
-1. `GenerationProvider` 协议对齐旧后端契约：`submit(model:params:) -> JobId`、`poll(jobId) -> status/resultUrls`、data-URI 参考素材
-2. fal.ai adapter 先行（视频/图片/音频基本全覆盖），Replicate 按需
-3. `ModelCatalog` 改编译期静态模型表（复用 `VideoModelConfig` 等类型），参数校验/默认值从服务端挪到 client
-4. `enhanceDraft`（提示词优化）改走 BYOK Anthropic
-5. 从 git 基线恢复 `Generation/` 中供应商无关部分（Preprocessing、Submission、UI），接新 provider
-6. MCP generate 工具按同一域操作恢复；key 走 `KeychainStore` + Settings 新页
+生成不走上游后端，两条通道并存（`GenerationChannel`）：
+
+1. **浏览器通道（默认，零 API 成本）**：ego-browser 驱动网页会话，见
+   `docs/BROWSER_GENERATION.md`。图片 = ChatGPT 网页（支持参考图）、视频 = Gemini Veo
+   （Bilal profile，支持图生视频首帧）、音乐 = Gemini Lyria。Generate 面板三档 +
+   `generate_video/generate_image/generate_audio` Agent 工具都已接入。
+2. **fal.ai 通道（备用，付费）**：Kling t2v/i2v、Nano Banana Pro，key 存 Keychain
+   （Settings → Agent）。
 
 ## 暂不做 / 可选后续
 
 - 品牌与 bundle ID 重命名（涉及 Keychain/UserDefaults 迁移，收益纯观感）
 - README / 徽章 / 社区链接清理
 - Developer ID 签名 + 公证（需要 $99/年 开发者账号，仅在向其他 Mac 浏览器分发时有意义）
-- 本地 Whisper、Suno 类音乐生成接入
+- 本地 Whisper 接入
+- `enhanceDraft`（提示词润色）改走 BYOK Anthropic
+- 直连厂商 adapter（火山 Seedance、Kling 官方 JWT、Gemini API、OpenAI）——想去掉
+  fal.ai 聚合层时再做

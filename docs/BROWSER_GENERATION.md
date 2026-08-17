@@ -1,26 +1,45 @@
 # 浏览器生成（免 API）
 
-用 ego-browser 复用 ChatGPT 网页登录态生图：不申请 API key、不产生 API 费用，
-只消耗 ChatGPT 订阅额度。2026-08-16 实测跑通。
+用 ego-browser 复用 ChatGPT / Gemini 网页登录态生图、生视频、生音乐：不申请 API key、
+不产生 API 费用，只消耗订阅额度。图片/视频链路 2026-08-16 实测跑通，参考图与图生视频
+2026-08-17 实测跑通。
 
 ## 一键使用
 
 ```bash
-scripts/generate-image-browser.sh "提示词" [输出路径.png]
+scripts/generate-image-browser.sh "提示词" [输出路径.png] [--reference-image 本地图]...
+scripts/generate-video-browser.sh "提示词" [输出.mp4] [profile 名，默认 Bilal] [--source-image 本地图]
+scripts/generate-music-browser.sh "提示词" [输出.mp4] [profile 名，默认 Bilal]
 ```
 
-默认输出到 `~/Downloads/palmier-gen-<时间>.png`。产物为合法 PNG，可直接拖进
-Palmier Pro 媒体面板。
+默认输出到 `~/Downloads/`。参数经 `/tmp/palmier-*-bridge.txt` 桥接文件传给 ego 的
+node 运行时（ego 不透传环境变量），桥内全部 base64——提示词可以含换行。
 
-前提：ego-browser CLI 已安装、ChatGPT 已在浏览器里登录（任务空间继承登录态）。
+前提：ego-browser CLI 已安装、对应网站已登录（任务空间继承登录态）。
+
+## App 内使用（已集成）
+
+Generate 面板（⌘G）三档：视频 / 图片 / 音乐。浏览器通道模型：
+
+- **Gemini Veo (Browser)** — 视频；可选 Start Frame（图生视频，上传为会话首帧）
+- **GPT Image (Browser)** — 图片；可挂最多 3 张 References（上传进 composer）
+- **Gemini Music (Browser)** — 音乐；无参数
+
+Agent / MCP 工具：`list_models`（type 含 `audio`）、`generate_video`（`startFrameMediaRef`
+在 Veo 上可选传）、`generate_image`（`referenceImageMediaRefs` 全通道生效）、`generate_audio`。
+源图/参考图按资产在项目包里的绝对路径传给脚本，脚本再 `uploadFile` 进网页。
 
 ## 实测链路（脚本内部做的事）
 
 1. `useOrCreateTaskSpace('palmier web generation')` — 固定任务空间，跨次复用一个 tab
 2. 打开 `chatgpt.com/` 首页（新会话）
-3. `fillInput('#prompt-textarea', 提示词)` + 点击 `button[data-testid="send-button"]`
-4. 每 5 秒轮询 `main img`，出现 `naturalWidth > 256` 且非头像/Logo 的图即完成（约 15 秒）
-5. 页面内 `fetch(签名URL)` → FileReader 转 base64 → Node 侧写盘 → 校验 PNG 魔数
+3. 有参考图时先 `uploadFile('input[type="file"]', path)` 逐张挂进 composer，并快照
+   当时页面所有 `img` 的 src（附件会在发出的消息里回显，结果检测要排除）
+4. `fillInput('#prompt-textarea', 提示词)` + 等待 `button[data-testid="send-button"]`
+   可用后点击（附件上传期间按钮禁用，脚本轮询最长 40 秒）
+5. 每 5 秒轮询 `main img`，出现 `naturalWidth > 256`、非头像/Logo、且 src 不在快照里的
+   **新**图即完成；多条命中取 DOM 序最后一个（结果渲染在最底部）
+6. 页面内 `fetch(签名URL)` → FileReader 转 base64 → Node 侧写盘 → 校验 PNG 魔数
 
 ## 三个实测踩过的坑（改脚本前必读）
 
@@ -43,32 +62,31 @@ Palmier Pro 媒体面板。
 
 ## 边界与风险
 
-- **频率**：网页自动化属 OpenAI ToS 灰区，个人低频没事，高频轰炸有账号风控风险
-- **脆弱性**：`#prompt-textarea` / `send-button` / `main img` 是当前 UI 的选择器，
-  ChatGPT 改版需跟着更新（都在脚本里，一处可改）
-- **仅图片**：视频不在此链路（另见下节）
-- 单张全程约 1 分钟（含浏览器就绪）
-
-## 规划中的集成
-
-Palmier Pro 侧可加 `BrowserChatGPTProvider` adapter：`GenerationProvider` 协议的
-实现之一，`submit/poll/result` 通过 `Process` 调 `ego-browser nodejs` 驱动网页，
-零 key、走订阅。与 fal / 直连厂商在目录里并存可选。
+- **频率**：网页自动化属 OpenAI / Google ToS 灰区，个人低频没事，高频轰炸有账号风控风险
+- **脆弱性**：`#prompt-textarea` / `send-button` / `main img` / Gemini 的
+  `rich-textarea .ql-editor` / `Upload & tools` 是当前 UI 的选择器，网站改版需跟着更新
+  （都在脚本里，一处可改）
+- 单张图全程约 1 分钟（含浏览器就绪）
 
 ## 视频生成（Gemini / Veo，走 Bilal 账号）
 
 ```bash
-scripts/generate-video-browser.sh "提示词（建议以 Generate a video: 开头）" [输出.mp4] [profile 名，默认 Bilal]
+scripts/generate-video-browser.sh "提示词（建议以 Generate a video: 开头）" [输出.mp4] [profile 名，默认 Bilal] [--source-image 本地图]
 ```
 
-链路（2026-08-16 实测，单条约 1 分钟生成 + 下载）：
+链路（2026-08-16 实测，单条约 1 分钟生成 + 下载；i2v 2026-08-17 实测）：
 
 1. 任务空间绑定 **Bilal profile**（见下节），打开 `gemini.google.com/app`
-2. `fillInput('rich-textarea .ql-editor', 提示词)`——Gemini 的 composer 是 Quill
+2. `--source-image` 时：点击 `button[aria-label="Upload & tools"]` 打开上传菜单（composer
+   的 `input[type="file"]` 只在菜单打开后才挂载），`waitForElement` 等挂载后
+   `uploadFile` 塞图。该 input 的 accept 列表只有文档扩展名，但 CDP 设置文件不受
+   accept 过滤，图片正常上传（实测出现 "Uploading image" toast + 附件芯片）
+3. `fillInput('rich-textarea .ql-editor', 提示词)`——Gemini 的 composer 是 Quill
    rich-textarea，选择器 `rich-textarea .ql-editor`
-3. 点击 `button.send-button`（或 `button[aria-label*="Send"]`）
-4. 每 10 秒轮询 `main video` 元素（最长 6 分钟），出现即生成完成
-5. `video.src` 是 `contribution.usercontent.google.com` 签名下载链——**必须页面内
+4. 等待 `button.send-button`（或 `button[aria-label*="Send"]`）可用后点击——附件上传
+   期间禁用
+5. 每 10 秒轮询 `main video` 元素（最长 6 分钟），出现即生成完成
+6. `video.src` 是 `contribution.usercontent.google.com` 签名下载链——**必须页面内
    fetch**（要 Google cookie），base64 落盘，校验 MP4 `ftyp` 魔数
 
 ## 音乐生成（Gemini / Lyria，Bilal 账号）

@@ -9,6 +9,7 @@ struct GenerationModelTests {
             == GenerationModel.all.filter { $0.channel == .fal }.count)
         #expect(GenerationModel.all.contains { $0.type == .video && !$0.requiresSourceImage })
         #expect(GenerationModel.all.contains { $0.type == .image })
+        #expect(GenerationModel.all.contains { $0.type == .audio })
         for model in GenerationModel.all {
             if model.channel == .fal {
                 #expect(!model.aspectRatios.isEmpty)
@@ -18,9 +19,22 @@ struct GenerationModelTests {
             } else {
                 #expect(model.endpoint.isEmpty)
             }
+            #expect(!model.requiresSourceImage || model.acceptsSourceImage)
         }
         #expect(GenerationModel.all.contains { $0.channel == .browserChatGPT && $0.type == .image })
         #expect(GenerationModel.all.contains { $0.channel == .browserGemini && $0.type == .video })
+        #expect(GenerationModel.all.contains { $0.channel == .browserGemini && $0.type == .audio })
+    }
+
+    @Test func browserChannelsSupportImageInputs() {
+        let veo = GenerationModel.byId("browser-gemini-video")!
+        #expect(veo.supportsSourceImage && !veo.requiresSourceImage)
+        let chatgpt = GenerationModel.byId("browser-chatgpt-image")!
+        #expect(chatgpt.maxReferenceImages > 0)
+        let music = GenerationModel.byId("browser-gemini-music")!
+        #expect(music.type == .audio && !music.supportsSourceImage && music.maxReferenceImages == 0)
+        let klingT2V = GenerationModel.byId("kling-v2.5-turbo-text-to-video")!
+        #expect(!klingT2V.supportsSourceImage)
     }
 
     @Test func videoInputCarriesSchemaFields() throws {

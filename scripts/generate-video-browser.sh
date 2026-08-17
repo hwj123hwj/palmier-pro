@@ -4,26 +4,54 @@
 # No API key; consumes that account's Gemini web quota.
 #
 # Usage:
-#   scripts/generate-video-browser.sh "prompt" [output.mp4] [profile-name]
+#   scripts/generate-video-browser.sh "prompt" [output.mp4] [profile-name] [--source-image path]
+#
+# With --source-image the image is uploaded as the conversation attachment and
+# Veo animates it (image-to-video, first frame).
 #
 # Requirements: ego-browser CLI installed; the named profile logged into Gemini.
 # Selectors verified against gemini.google.com as of 2026-08-16.
 # NOTE: ego-browser does not forward environment variables to its node runtime,
 # so parameters travel through a fixed bridge file (/tmp/palmier-video-bridge.txt).
+# All values are base64 (prompts may contain newlines).
 set -euo pipefail
 
-PROMPT="${1:?usage: generate-video-browser.sh \"prompt\" [output.mp4] [profile-name]}"
+SOURCE_IMAGE=""
+POSITIONAL=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --source-image)
+      if [ $# -lt 2 ] || [ ! -f "$2" ]; then
+        echo "source image not found: ${2:-<missing>}" >&2; exit 1
+      fi
+      SOURCE_IMAGE="$2"; shift 2 ;;
+    --source-image=*)
+      p="${1#*=}"
+      if [ ! -f "$p" ]; then echo "source image not found: $p" >&2; exit 1; fi
+      SOURCE_IMAGE="$p"; shift ;;
+    *) POSITIONAL+=("$1"); shift ;;
+  esac
+done
+PROMPT="${POSITIONAL[0]:?usage: generate-video-browser.sh \"prompt\" [output.mp4] [profile] [--source-image path]}"
 # The web UI only invokes Veo for explicit video intent.
 if printf '%s' "$PROMPT" | grep -qiE 'video|视频|动画|animate'; then
   EFFECTIVE_PROMPT="$PROMPT"
+elif [ -n "$SOURCE_IMAGE" ]; then
+  EFFECTIVE_PROMPT="Generate a video from the attached image: $PROMPT"
 else
   EFFECTIVE_PROMPT="Generate a video: $PROMPT"
 fi
-OUT="${2:-$HOME/Downloads/palmier-video-$(date +%H%M%S).mp4}"
-PROFILE_NAME="${3:-Bilal}"
+OUT="${POSITIONAL[1]:-$HOME/Downloads/palmier-video-$(date +%H%M%S).mp4}"
+PROFILE_NAME="${POSITIONAL[2]:-Bilal}"
 
+b64() { printf '%s' "$1" | base64 | tr -d '\n'; printf '\n'; }
 BRIDGE=/tmp/palmier-video-bridge.txt
-printf '%s\n%s\n%s\n' "$EFFECTIVE_PROMPT" "$OUT" "$PROFILE_NAME" > "$BRIDGE"
+{
+  b64 "$EFFECTIVE_PROMPT"
+  b64 "$OUT"
+  b64 "$PROFILE_NAME"
+  b64 "$SOURCE_IMAGE"
+} > "$BRIDGE"
 trap 'rm -f "$BRIDGE"' EXIT
 
 
@@ -41,7 +69,9 @@ fi
 
 "$EGO_BIN" nodejs <<'EOF'
 const fs = await import('fs')
-const [promptText, outPath, profileName] = fs.readFileSync('/tmp/palmier-video-bridge.txt', 'utf8').split('\n')
+const dec = s => Buffer.from(s, 'base64').toString('utf8')
+const [promptText, outPath, profileName, sourceImage] =
+  fs.readFileSync('/tmp/palmier-video-bridge.txt', 'utf8').split('\n').filter(l => l.length > 0).map(dec)
 
 // Task spaces bind a browser profile at creation; reuse ours, or create it
 // on the account profile that carries the video quota.
@@ -62,15 +92,40 @@ if (!task) {
 await openOrReuseTab('https://gemini.google.com/app', { wait: true, timeout: 30 })
 await wait(3)
 
+// Attach the first frame. The composer's file input only mounts after opening
+// the "Upload & tools" menu; the input's accept list is document-typed but CDP
+// upload of an image is accepted (verified: "Uploading image" + attachment chip).
+if (sourceImage) {
+  try {
+    await click('button[aria-label="Upload & tools"]', { label: 'open upload menu' })
+  } catch (e) {
+    await js(`(() => {
+      const btn = [...document.querySelectorAll('button')].find(b =>
+        /upload|上传|附件|attach/i.test((b.getAttribute('aria-label') || '') + (b.textContent || '')))
+      if (btn) btn.click()
+      return !!btn
+    })()`)
+  }
+  await waitForElement('input[type="file"]', { timeout: 10 })
+  await uploadFile('input[type="file"]', sourceImage)
+  await wait(3)
+}
+
 await fillInput('rich-textarea .ql-editor', promptText)
 await wait(1)
-const sent = await js(`(() => {
-  const btn = document.querySelector('button.send-button, button[aria-label*="Send"]')
-  if (!btn || btn.disabled) return false
-  btn.click()
-  return true
-})()`)
-if (!sent) { throw new Error('send button not available') }
+
+// The send button stays disabled while the attachment uploads — wait it out.
+let sent = false
+for (let i = 0; i < 30 && !sent; i++) {
+  sent = await js(`(() => {
+    const btn = document.querySelector('button.send-button, button[aria-label*="Send"]')
+    if (!btn || btn.disabled || btn.getAttribute('aria-disabled') === 'true') return false
+    btn.click()
+    return true
+  })()`)
+  if (!sent) await wait(2)
+}
+if (!sent) { throw new Error('send button never became available') }
 
 // Veo renders a <video> when done; ~1 min typical, allow 6.
 let src = null

@@ -210,6 +210,7 @@ final class ToolExecutor {
         case .listModels:    return try listModels(args)
         case .generateVideo: return try generateVideo(editor, args)
         case .generateImage: return try generateImage(editor, args)
+        case .generateAudio: return try generateAudio(editor, args)
         case .organizeMedia: return try organizeMedia(editor, args)
         case .setProjectSettings: return try setProjectSettings(editor, args)
         case .createTimeline:     return try createTimeline(editor, args)
