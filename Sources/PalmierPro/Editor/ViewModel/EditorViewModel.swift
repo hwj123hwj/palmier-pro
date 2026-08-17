@@ -120,6 +120,7 @@ final class EditorViewModel {
     var selectedGap: GapSelection?
     var selectedTimelineRange: TimelineRangeSelection?
     var selectedTimelineMarkerIds: Set<String> = []
+    var timelineMarkerPreview: TimelineMarker?
     var selectedMediaAssetIds: Set<String> = []
     var selectedFolderIds: Set<String> = []
     var selectedTimelineIds: Set<String> = []
@@ -136,6 +137,7 @@ final class EditorViewModel {
     var rotationSnapGuidesVisible: Bool = false
     var timelineVisibleWidth: Double = 0
     var timelineRenderRevision: Int = 0
+    var timelineCompositionGeneration: Int = 0
     @ObservationIgnored private var clipLocationIndexCache: (revision: Int, timelineId: String, index: [String: ClipLocation])?
     @ObservationIgnored var keyframeNavigationCache: [
         KeyframeNavigationCacheKey: [KeyframeLaneNavigationTarget]

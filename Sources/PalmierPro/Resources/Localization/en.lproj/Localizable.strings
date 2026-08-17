@@ -59,6 +59,7 @@
 "Agentic editing" = "Agentic editing";
 "Alignment" = "Alignment";
 "All" = "All";
+"All Statuses" = "All Statuses";
 "All fonts" = "All fonts";
 "Amount" = "Amount";
 "Analyzing media so you can search it." = "Analyzing media so you can search it.";
@@ -161,6 +162,7 @@
 "Color Dodge" = "Color Dodge";
 "Color Wheels" = "Color Wheels";
 "Color for the active word." = "Color for the active word.";
+"Comments" = "Comments";
 "Community" = "Community";
 "Community Skills Unavailable" = "Community Skills Unavailable";
 "Compatibility: %@" = "Compatibility: %@";
@@ -210,6 +212,7 @@
 "Delete" = "Delete";
 "Delete %lld" = "Delete %lld";
 "Delete Keyframe" = "Delete Keyframe";
+"Delete Marker" = "Delete Marker";
 "Delete Project" = "Delete Project";
 "Delete Project?" = "Delete Project?";
 "Delete Selected Projects?" = "Delete Selected Projects?";
@@ -288,6 +291,7 @@
 "Fill prompt" = "Fill prompt";
 "Film Grain" = "Film Grain";
 "Filmmaker" = "Filmmaker";
+"Filter markers by status" = "Filter markers by status";
 "Final Cut Pro" = "Final Cut Pro";
 "Fit" = "Fit";
 "Fix names & jargon" = "Fix names & jargon";
@@ -432,6 +436,7 @@
 "Mark Speakers" = "Mark Speakers";
 "Marker %lld" = "Marker %lld";
 "Marker name" = "Marker name";
+"Markers" = "Markers";
 "Marketer" = "Marketer";
 "Master Audio Meter" = "Master Audio Meter";
 "Master — defines the group's clock and transcript." = "Master — defines the group's clock and transcript.";
@@ -503,7 +508,6 @@
 "Normal" = "Normal";
 "Not selected" = "Not selected";
 "Not synced — unusable as an angle." = "Not synced — unusable as an angle.";
-"Notes" = "Notes";
 "Notifications" = "Notifications";
 "OK" = "OK";
 "Off" = "Off";
@@ -556,6 +560,7 @@
 "Preparing" = "Preparing";
 "Preparing…" = "Preparing…";
 "Presence" = "Presence";
+"Press M in the timeline to add a marker." = "Press M in the timeline to add a marker.";
 "Preview" = "Preview";
 "Product demos" = "Product demos";
 "Project" = "Project";
@@ -604,9 +609,11 @@
 "Resolution" = "Resolution";
 "Resolution must be at least 2 × 2 pixels." = "Resolution must be at least 2 × 2 pixels.";
 "Resolution must not exceed 8192 pixels on either edge." = "Resolution must not exceed 8192 pixels on either edge.";
+"Resolved" = "Resolved";
 "Restart Palmier Pro" = "Restart Palmier Pro";
 "Retry" = "Retry";
 "Reveal in Finder" = "Reveal in Finder";
+"Review" = "Review";
 "Right" = "Right";
 "Ripple Delete" = "Ripple Delete";
 "Ripple Delete Gap" = "Ripple Delete Gap";
@@ -699,6 +706,8 @@
 "Start creating" = "Start creating";
 "Start creating, or explore these to get the most out of Palmier Pro." = "Start creating, or explore these to get the most out of Palmier Pro.";
 "Starts %@s into the group's clock; matched the master with %@%% confidence." = "Starts %@s into the group's clock; matched the master with %@%% confidence.";
+"Status Filter" = "Status Filter";
+"Status: %@" = "Status: %@";
 "Step %lld of %lld" = "Step %lld of %lld";
 "Step Backward" = "Step Backward";
 "Step Forward" = "Step Forward";
@@ -732,6 +741,7 @@
 "Text" = "Text";
 "The clip you're adding has different settings than the current project." = "The clip you're adding has different settings than the current project.";
 "The export" = "The export";
+"The marker comment changed while you were editing. Review it and try again." = "The marker comment changed while you were editing. Review it and try again.";
 "The project will be moved to the Trash." = "The project will be moved to the Trash.";
 "The selected model refused this request. Revise the prompt and try again." = "The selected model refused this request. Revise the prompt and try again.";
 "The selected projects will be moved to the Trash." = "The selected projects will be moved to the Trash.";
@@ -760,7 +770,6 @@
 "Top" = "Top";
 "Top / Bottom" = "Top / Bottom";
 "Track Name" = "Track Name";
-"Track: %@" = "Track: %@";
 "Tracking" = "Tracking";
 "Transcribing…" = "Transcribing…";
 "Transcription failed: %@" = "Transcription failed: %@";
