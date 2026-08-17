@@ -13,11 +13,17 @@
 set -euo pipefail
 
 PROMPT="${1:?usage: generate-music-browser.sh \"prompt\" [output.mp4] [profile-name]}"
+# The web UI only invokes its music tool for explicit music intent.
+if printf '%s' "$PROMPT" | grep -qiE 'music|音乐|歌曲|song|audio|配乐'; then
+  EFFECTIVE_PROMPT="$PROMPT"
+else
+  EFFECTIVE_PROMPT="Generate music: $PROMPT"
+fi
 OUT="${2:-$HOME/Downloads/palmier-music-$(date +%H%M%S).mp4}"
 PROFILE_NAME="${3:-Bilal}"
 
 BRIDGE=/tmp/palmier-music-bridge.txt
-printf '%s\n%s\n%s\n' "$PROMPT" "$OUT" "$PROFILE_NAME" > "$BRIDGE"
+printf '%s\n%s\n%s\n' "$EFFECTIVE_PROMPT" "$OUT" "$PROFILE_NAME" > "$BRIDGE"
 trap 'rm -f "$BRIDGE"' EXIT
 
 

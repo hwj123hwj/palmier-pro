@@ -13,10 +13,16 @@
 set -euo pipefail
 
 PROMPT="${1:?usage: generate-image-browser.sh \"prompt\" [output.png]}"
+# The web UI only invokes its image tool for explicit image intent.
+if printf '%s' "$PROMPT" | grep -qiE '^(生成|画)|图片|image|generate|create|draw|illustrat'; then
+  EFFECTIVE_PROMPT="$PROMPT"
+else
+  EFFECTIVE_PROMPT="生成一张图片：$PROMPT"
+fi
 OUT="${2:-$HOME/Downloads/palmier-gen-$(date +%H%M%S).png}"
 
 BRIDGE=/tmp/palmier-gen-bridge.txt
-printf '%s\n%s\n' "$PROMPT" "$OUT" > "$BRIDGE"
+printf '%s\n%s\n' "$EFFECTIVE_PROMPT" "$OUT" > "$BRIDGE"
 trap 'rm -f "$BRIDGE"' EXIT
 
 

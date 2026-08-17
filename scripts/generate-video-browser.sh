@@ -13,11 +13,17 @@
 set -euo pipefail
 
 PROMPT="${1:?usage: generate-video-browser.sh \"prompt\" [output.mp4] [profile-name]}"
+# The web UI only invokes Veo for explicit video intent.
+if printf '%s' "$PROMPT" | grep -qiE 'video|视频|动画|animate'; then
+  EFFECTIVE_PROMPT="$PROMPT"
+else
+  EFFECTIVE_PROMPT="Generate a video: $PROMPT"
+fi
 OUT="${2:-$HOME/Downloads/palmier-video-$(date +%H%M%S).mp4}"
 PROFILE_NAME="${3:-Bilal}"
 
 BRIDGE=/tmp/palmier-video-bridge.txt
-printf '%s\n%s\n%s\n' "$PROMPT" "$OUT" "$PROFILE_NAME" > "$BRIDGE"
+printf '%s\n%s\n%s\n' "$EFFECTIVE_PROMPT" "$OUT" "$PROFILE_NAME" > "$BRIDGE"
 trap 'rm -f "$BRIDGE"' EXIT
 
 
