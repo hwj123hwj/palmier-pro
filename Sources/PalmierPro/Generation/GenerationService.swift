@@ -36,7 +36,6 @@ final class GenerationService {
     private let maxDownloadBytes: Int64 = 2 * 1024 * 1024 * 1024
 
     func submit(_ request: Request, editor: EditorViewModel) throws -> MediaAsset {
-        guard GenerationKeyStore.isConfigured else { throw GenerationError.keyMissing }
         let prompt = request.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { throw GenerationError.invalidPrompt }
         try validate(request)
