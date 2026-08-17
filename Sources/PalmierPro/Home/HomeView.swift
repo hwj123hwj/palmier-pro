@@ -22,9 +22,12 @@ struct HomeView: View {
         .focusEffectDisabled()
         .task { await VisualModelLoader.shared.prepare() }
         .overlay {
-            if !onboarding.isComplete {
-                OnboardingOverlay(onboarding: onboarding)
+            ZStack {
+                if !onboarding.isComplete {
+                    OnboardingOverlay(onboarding: onboarding)
+                }
             }
+            .allowsHitTesting(!onboarding.isComplete)
         }
         .animation(.easeInOut(duration: AppTheme.Anim.transition), value: onboarding.isComplete)
     }
