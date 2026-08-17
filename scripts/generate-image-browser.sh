@@ -19,7 +19,20 @@ BRIDGE=/tmp/palmier-gen-bridge.txt
 printf '%s\n%s\n' "$PROMPT" "$OUT" > "$BRIDGE"
 trap 'rm -f "$BRIDGE"' EXIT
 
-ego-browser nodejs <<'EOF'
+
+# GUI-launched callers pass a minimal PATH — resolve ego-browser absolutely.
+EGO_BIN="$(command -v ego-browser || true)"
+if [ -z "$EGO_BIN" ]; then
+  for candidate in "$HOME/.local/bin/ego-browser" /usr/local/bin/ego-browser /opt/homebrew/bin/ego-browser; do
+    if [ -x "$candidate" ]; then EGO_BIN="$candidate"; break; fi
+  done
+fi
+if [ -z "$EGO_BIN" ]; then
+  echo "ego-browser not found in PATH, ~/.local/bin, /usr/local/bin, or /opt/homebrew/bin" >&2
+  exit 1
+fi
+
+"$EGO_BIN" nodejs <<'EOF'
 const task = await useOrCreateTaskSpace('palmier web generation')
 const fs = await import('fs')
 const [promptText, outPath] = fs.readFileSync('/tmp/palmier-gen-bridge.txt', 'utf8').split('\n')
