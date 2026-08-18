@@ -137,6 +137,8 @@ final class EditorViewModel {
     var rotationSnapGuidesVisible: Bool = false
     var timelineVisibleWidth: Double = 0
     var timelineRenderRevision: Int = 0
+    /// Clip ids currently awaiting an AI-generated replacement.
+    var pendingReplacements: Set<String> = []
     var timelineCompositionGeneration: Int = 0
     @ObservationIgnored private var clipLocationIndexCache: (revision: Int, timelineId: String, index: [String: ClipLocation])?
     @ObservationIgnored var keyframeNavigationCache: [

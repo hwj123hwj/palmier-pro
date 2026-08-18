@@ -1,13 +1,19 @@
 import SwiftUI
 
 struct CaptionTab: View {
+    private enum Output {
+        case captions((String?) -> Void)
+        case transcript((EditorViewModel.TimelineTranscriptDocument) -> Void)
+    }
+
     @Environment(EditorViewModel.self) var editor
-    let onGeneratedCaptions: (String?) -> Void
+    private let output: Output
 
     @State private var style: TextStyle = .caption
     @State private var center = AppTheme.Caption.defaultCenter
     @State private var selectedTrackId: String?
     @State private var selectedClipTargets: [String] = []
+    @State private var provider: TranscriptionProvider = .local
     @State private var animationPreset: TextAnimation.Preset = .none
     @State private var animationHighlight: TextStyle.RGBA = TextAnimation.defaultHighlight
     @State private var censorProfanity = false
@@ -26,6 +32,18 @@ struct CaptionTab: View {
     private static let previewText = L10n.key("Captions will look like this")
     private static let maxWordRange = 0.0...50.0
     private static let maxCharacterRange = 0.0...200.0
+
+    init(onGeneratedCaptions: @escaping (String?) -> Void) {
+        output = .captions(onGeneratedCaptions)
+    }
+
+    init(onGeneratedTranscript: @escaping (EditorViewModel.TimelineTranscriptDocument) -> Void) {
+        output = .transcript(onGeneratedTranscript)
+    }
+
+    private var isTranscriptOnly: Bool {
+        if case .transcript = output { true } else { false }
+    }
 
     private var previewConfiguration: CaptionPreviewConfiguration {
         CaptionPreviewConfiguration(
@@ -86,14 +104,20 @@ struct CaptionTab: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.zero) {
                         sourceSection
-                        settingsSection
-                        styleSection
-                        animationSection
+                        if isTranscriptOnly {
+                            generateBar
+                        } else {
+                            settingsSection
+                            styleSection
+                            animationSection
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
 
-                generateBar
+                if !isTranscriptOnly {
+                    generateBar
+                }
             }
             if isGenerating {
                 AppTheme.Background.surfaceColor.opacity(AppTheme.Opacity.prominent)
@@ -103,14 +127,17 @@ struct CaptionTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.Background.surfaceColor)
         .task {
+            guard !isTranscriptOnly else { return }
             guard supportedLocales.isEmpty else { return }
             supportedLocales = (await Transcription.supportedLocales())
                 .sorted { languageName($0) < languageName($1) }
         }
         .onAppear {
             rememberSelectedClipTargets()
-            editor.captionPreviewCenterChange = { center = $0 }
-            showCaptionPreview()
+            if !isTranscriptOnly {
+                editor.captionPreviewCenterChange = { center = $0 }
+                showCaptionPreview()
+            }
         }
         .onDisappear {
             editor.captionPreviewConfiguration = nil
@@ -132,7 +159,11 @@ struct CaptionTab: View {
         EditorPanelGroup(
             L10n.string("Source"),
             isExpanded: $sourceExpanded,
-            headerAccessory: { captionPreviewToggle }
+            headerAccessory: {
+                if !isTranscriptOnly {
+                    captionPreviewToggle
+                }
+            }
         ) {
             InspectorRow(
                 label: L10n.string("Source"),
@@ -236,9 +267,9 @@ struct CaptionTab: View {
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.mini)
-                .accessibilityLabel(L10n.string("Censor profanity"))
-                .tint(AppTheme.Text.primaryColor.opacity(AppTheme.Opacity.strong))
-            }
+                    .accessibilityLabel(L10n.string("Censor profanity"))
+                    .tint(AppTheme.Text.primaryColor.opacity(AppTheme.Opacity.strong))
+                                }
         }
     }
 
@@ -380,7 +411,7 @@ struct CaptionTab: View {
     }
 
     private var generateLabel: String {
-        L10n.string("Generate")
+        isTranscriptOnly ? L10n.string("Transcribe") : L10n.string("Generate")
     }
 
     private var generateHelp: String {
@@ -435,7 +466,9 @@ struct CaptionTab: View {
                 .disabled(!canGenerateCaptions)
                 .help(generateHelp)
 
-                agentMenu
+                if !isTranscriptOnly {
+                    agentMenu
+                }
             }
         }
     }
@@ -457,21 +490,34 @@ struct CaptionTab: View {
             maxWords: maxWords,
             maxCharacters: maxCharacters,
             gapSettings: CaptionGapSettings(maximumGapSeconds: maximumGapSeconds) ?? .default,
+            provider: provider,
             animation: TextAnimation(preset: animationPreset, highlight: animationHighlight)
         )
         Task {
             isGenerating = true
             defer { isGenerating = false }
             do {
-                let createdIds = try await editor.generateCaptions(for: request)
-                if createdIds.isEmpty {
-                    note = L10n.string("No speech detected.")
-                } else {
-                    let groupId = createdIds.lazy.compactMap {
-                        editor.clipFor(id: $0)?.captionGroupId
-                    }.first
-                    editor.captionPreviewEnabled = false
-                    onGeneratedCaptions(groupId)
+                switch output {
+                case .transcript(let onGeneratedTranscript):
+                    let transcript = try await editor.timelineTranscript(
+                        for: request
+                    )
+                    if transcript.rows.isEmpty {
+                        note = L10n.string("No speech detected.")
+                    } else {
+                        onGeneratedTranscript(transcript)
+                    }
+                case .captions(let onGeneratedCaptions):
+                    let createdIds = try await editor.generateCaptions(for: request)
+                    if createdIds.isEmpty {
+                        note = L10n.string("No speech detected.")
+                    } else {
+                        let groupId = createdIds.lazy.compactMap {
+                            editor.clipFor(id: $0)?.captionGroupId
+                        }.first
+                        editor.captionPreviewEnabled = false
+                        onGeneratedCaptions(groupId)
+                    }
                 }
             } catch {
                 note = localizedCaptionError(error)
@@ -480,7 +526,7 @@ struct CaptionTab: View {
     }
 
     private func showCaptionPreview() {
-        editor.captionPreviewConfiguration = editor.mediaPanelVisible
+        editor.captionPreviewConfiguration = !isTranscriptOnly && editor.mediaPanelVisible
             ? previewConfiguration
             : nil
     }
