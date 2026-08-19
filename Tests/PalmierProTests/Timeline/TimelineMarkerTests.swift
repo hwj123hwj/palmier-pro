@@ -109,8 +109,8 @@ struct TimelineMarkerTests {
         let first = editor.addTimelineMarkerAtSelection()
         editor.currentFrame = 11
         let second = editor.addTimelineMarkerAtSelection()
-        #expect((first?.startFrame, first?.name) == (10, L10n.string("Marker 1")))
-        #expect(second?.name == L10n.string("Marker 2"))
+        #expect((first?.startFrame, first?.name) == (10, L10n.string("Marker \(1)")))
+        #expect(second?.name == L10n.string("Marker \(2)"))
     }
     @Test func marqueeCrossingRulerSelectsMarkers() {
         let geometry = TimelineGeometry(pixelsPerFrame: 1, trackHeights: [50])
