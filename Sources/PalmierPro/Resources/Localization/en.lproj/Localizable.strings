@@ -36,6 +36,7 @@
 "Add Marker (M)" = "Add Marker (M)";
 "Add Range to Chat" = "Add Range to Chat";
 "Add Text" = "Add Text";
+"Add a comment" = "Add a comment";
 "Add an Anthropic API key to use this model." = "Add an Anthropic API key to use this model.";
 "Add an OpenAI API key to use this model." = "Add an OpenAI API key to use this model.";
 "Add captions" = "Add captions";
@@ -279,6 +280,7 @@
 "Exposure" = "Exposure";
 "Extends captions across short gaps and holds the final caption." = "Extends captions across short gaps and holds the final caption.";
 "Extra Large" = "Extra Large";
+"Extract Audio" = "Extract Audio";
 "Fade In" = "Fade In";
 "Fade Out" = "Fade Out";
 "Failed" = "Failed";
@@ -495,6 +497,8 @@
 "No conversations yet" = "No conversations yet";
 "No exports yet" = "No exports yet";
 "No images" = "No images";
+"No markers" = "No markers";
+"No markers match this filter." = "No markers match this filter.";
 "No matches for \"%@\"" = "No matches for \"%@\"";
 "No matches for “%@”" = "No matches for “%@”";
 "No media" = "No media";
@@ -774,8 +778,6 @@
 "Track Name" = "Track Name";
 "Tracking" = "Tracking";
 "Transcribe" = "Transcribe";
-"Transcribe · %lld credits" = "Transcribe · %lld credits";
-"Transcribe · 1 credit" = "Transcribe · 1 credit";
 "Transcribing…" = "Transcribing…";
 "Transcript" = "Transcript";
 "Transcription failed: %@" = "Transcription failed: %@";

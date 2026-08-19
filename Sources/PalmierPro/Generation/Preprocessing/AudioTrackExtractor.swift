@@ -10,7 +10,6 @@ enum AudioTrackExtractor {
     @concurrent
     static func extract(
         sourceURL: URL,
-        trimmedSource: TrimmedSource? = nil,
         destURL: URL? = nil
     ) async throws -> URL {
         let asset = AVURLAsset(url: sourceURL)
@@ -19,8 +18,7 @@ enum AudioTrackExtractor {
         }
 
         let assetDuration = try await asset.load(.duration)
-        let sourceRange = trimmedSource?.timeRange
-            ?? CMTimeRange(start: .zero, duration: assetDuration)
+        let sourceRange = CMTimeRange(start: .zero, duration: assetDuration)
 
         let composition = AVMutableComposition()
         guard let compositionTrack = composition.addMutableTrack(
