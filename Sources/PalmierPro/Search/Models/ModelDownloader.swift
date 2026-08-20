@@ -43,6 +43,9 @@ final class ModelDownloader: @unchecked Sendable {
         case missingPackage(String)
     }
 
+    /// Retry budget for one file; each attempt resumes from the partial file.
+    private static let downloadAttempts = 40
+
     static let modelsDir = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("PalmierPro/Models")
@@ -86,7 +89,13 @@ final class ModelDownloader: @unchecked Sendable {
             let zipURL = try await download(baseURL.appendingPathComponent(file.name), to: staging) { fileFraction in
                 progress?((base + fileFraction * Double(file.bytes)) / Double(totalBytes))
             }
-            try Self.verify(zipURL, sha256: file.sha256)
+            do {
+                try Self.verify(zipURL, sha256: file.sha256)
+            } catch {
+                // A resumed partial that no longer matches must not poison later attempts.
+                try? FileManager.default.removeItem(at: Self.partialURL(for: file.name))
+                throw error
+            }
             let extracted = try Self.unzip(zipURL, in: staging)
             // Encoder zips contain an .mlpackage to compile; the tokenizer zip is plain files.
             if extracted.pathExtension == "mlpackage" {
@@ -113,34 +122,72 @@ final class ModelDownloader: @unchecked Sendable {
         return installed
     }
 
-    private final class ProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-        let onProgress: @Sendable (Double) -> Void
-        init(onProgress: @escaping @Sendable (Double) -> Void) { self.onProgress = onProgress }
-
-        func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                        didFinishDownloadingTo location: URL) {}
-
-        func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                        didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                        totalBytesExpectedToWrite: Int64) {
-            guard totalBytesExpectedToWrite > 0 else { return }
-            onProgress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
-        }
+    /// Partial downloads live in a stable temp path so retries — including a
+    /// fresh install attempt after a failure — resume instead of restarting.
+    private static func partialURL(for name: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("palmier-model-" + name + ".part")
     }
 
+    /// Resumable download: appends to the partial file over bounded retries so
+    /// links that reset or stall mid-transfer can still finish.
     private func download(
         _ url: URL,
         to dir: URL,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
-        let delegate = ProgressDelegate(onProgress: progress)
-        let (temp, response) = try await URLSession.shared.download(from: url, delegate: delegate)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw DownloadError.httpError(http.statusCode, url.lastPathComponent)
-        }
         let dest = dir.appendingPathComponent(url.lastPathComponent)
-        try FileManager.default.moveItem(at: temp, to: dest)
-        return dest
+        let partial = Self.partialURL(for: url.lastPathComponent)
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: partial.path) {
+            guard fm.createFile(atPath: partial.path, contents: nil) else {
+                throw DownloadError.httpError(-1, url.lastPathComponent)
+            }
+        }
+        let handle = try FileHandle(forWritingTo: partial)
+        defer { try? handle.close() }
+
+        for _ in 0..<Self.downloadAttempts {
+            var request = URLRequest(url: url)
+            let offset = Int64(try handle.offset())
+            if offset > 0 { request.setValue("bytes=\(offset)-", forHTTPHeaderField: "Range") }
+            request.timeoutInterval = 60
+            do {
+                let (temp, response) = try await URLSession.shared.download(for: request)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 200
+                guard (200..<300).contains(code) else {
+                    try? FileManager.default.removeItem(at: temp)
+                    throw DownloadError.httpError(code, url.lastPathComponent)
+                }
+                if offset > 0, code == 200 {
+                    // Server ignored the Range header; start over from byte zero.
+                    try handle.truncate(atOffset: 0)
+                }
+                let start = Int64(try handle.offset())
+                let expected = response.expectedContentLength
+                let reader = try FileHandle(forReadingFrom: temp)
+                defer { try? reader.close() }
+                var written = start
+                while let chunk = try reader.read(upToCount: 1 << 20), !chunk.isEmpty {
+                    try handle.write(contentsOf: chunk)
+                    written += Int64(chunk.count)
+                    if expected > 0 { progress(Double(written) / Double(start + expected)) }
+                }
+                if expected >= 0, written != start + expected {
+                    throw DownloadError.httpError(-2, url.lastPathComponent)
+                }
+                try FileManager.default.removeItem(at: temp)
+                try fm.moveItem(at: partial, to: dest)
+                return dest
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let DownloadError.httpError(code, _) where (400..<600).contains(code) {
+                throw DownloadError.httpError(code, url.lastPathComponent)
+            } catch {
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+        throw DownloadError.httpError(-3, url.lastPathComponent)
     }
 
     static func verify(_ url: URL, sha256 expected: String) throws {
