@@ -73,7 +73,8 @@ const outPath = dec(lines[1])
 const refPaths = lines.slice(2).map(dec)
 
 await openOrReuseTab('https://chatgpt.com/', { wait: true, timeout: 30 })
-await wait(3)
+await waitForElement('#prompt-textarea', { timeout: 20 })
+await wait(2)
 
 // Attach references through the composer's hidden file input before typing.
 for (const ref of refPaths) {

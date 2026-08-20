@@ -68,7 +68,9 @@ if (!task) {
 }
 
 await openOrReuseTab('https://gemini.google.com/app', { wait: true, timeout: 30 })
-await wait(3)
+// The Angular composer hydrates late on slow links — wait for it explicitly.
+await waitForElement('rich-textarea .ql-editor', { timeout: 20 })
+await wait(2)
 
 await fillInput('rich-textarea .ql-editor', promptText)
 await wait(1)
