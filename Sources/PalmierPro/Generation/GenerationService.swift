@@ -31,6 +31,8 @@ final class GenerationService {
     }
 
     private let provider = FalProvider()
+    /// Test seam; nil drives the repo's ~/palmier-pro/scripts directory.
+    var scriptsDirectoryOverride: URL?
     private var tasks: [String: Task<Void, Never>] = [:]
     private let pollInterval: Duration = .seconds(3)
     private let maxDownloadBytes: Int64 = 2 * 1024 * 1024 * 1024
@@ -127,8 +129,11 @@ final class GenerationService {
         do {
             if request.model.channel != .fal {
                 asset.generationStatus = .generating
+                // get_media reads the manifest; keep in-flight phases visible there.
+                editor.updateManifestMetadata(for: [asset])
                 let staged = try await runBrowserScript(request: request, prompt: asset.generationInput?.prompt ?? "", editor: editor)
                 asset.generationStatus = .downloading
+                editor.updateManifestMetadata(for: [asset])
                 try editor.projectPackageCoordinator.beginMutation()
                 defer { editor.projectPackageCoordinator.endMutation() }
                 let committedURL = try await editor.commitStagedProjectMedia(
@@ -156,6 +161,7 @@ final class GenerationService {
             )
 
             asset.generationStatus = .generating
+            editor.updateManifestMetadata(for: [asset])
             let submit = try await provider.submit(endpoint: request.model.endpoint, input: input)
             while true {
                 try Task.checkCancellation()
@@ -170,6 +176,7 @@ final class GenerationService {
             }
 
             asset.generationStatus = .downloading
+            editor.updateManifestMetadata(for: [asset])
             let stagedURL = try await download(resultURL)
             try editor.projectPackageCoordinator.beginMutation()
             defer { editor.projectPackageCoordinator.endMutation() }
@@ -220,7 +227,7 @@ final class GenerationService {
         case .fal:
             throw GenerationError.invalidParameter("unsupported channel")
         }
-        let scriptsDir = FileManager.default.homeDirectoryForCurrentUser
+        let scriptsDir = scriptsDirectoryOverride ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("palmier-pro/scripts")
         let scriptURL = scriptsDir.appendingPathComponent(script)
         guard FileManager.default.isExecutableFile(atPath: scriptURL.path) else {
